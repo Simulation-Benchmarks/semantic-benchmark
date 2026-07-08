@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "semantic-benchmark"
+version = "0.1.0"
+description = "Reusable helpers for semantic benchmark metadata, RO-Crate aggregation, and RoHub provenance workflows."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "pandas",
+    "rdflib",
+    "rocrate",
+    "roc-validator",
+    "rohub",
+]
+
+[project.scripts]
+create-semantic-benchmark-rocrate = "semantic_benchmark.rocrate.create:main"
+download-semantic-benchmark = "semantic_benchmark.rohub.download:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"semantic_benchmark.rohub" = ["*.json"]
