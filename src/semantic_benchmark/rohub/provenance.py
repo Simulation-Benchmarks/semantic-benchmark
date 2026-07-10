@@ -568,14 +568,11 @@ def upload_provenance_rocrate(
     benchmark_name: str,
     username: str,
     password: str,
-    rocrate_title: str,
     code_repository_url: str | None = None,
     used_software_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> str:
     """Upload a provenance RO-Crate to RoHub and add semantic annotations."""
-    _ = rocrate_title
-
     login_to_rohub(
         username=username,
         password=password,
