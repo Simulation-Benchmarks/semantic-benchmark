@@ -190,7 +190,7 @@ def _create_action_object_ids(
     return object_ids
 
 
-def _formal_parameter_key(part: semantic_benchmark.ParameterEntry) -> tuple[Any, ...]:
+def _formal_parameter_key(part: semantics.ParameterEntry) -> tuple[Any, ...]:
     """Build a stable de-duplication key for a benchmark parameter.
 
     Args:
@@ -210,7 +210,7 @@ def _formal_parameter_key(part: semantic_benchmark.ParameterEntry) -> tuple[Any,
 
 
 def _formal_parameter_payload(
-    part_id: str, part: semantic_benchmark.ParameterEntry
+    part_id: str, part: semantics.ParameterEntry
 ) -> dict[str, Any]:
     """Create a JSON-LD FormalParameter payload.
 
@@ -235,12 +235,12 @@ def _formal_parameter_payload(
             "@id": unit
         }
 
-    if isinstance(part, semantic_benchmark.NumericalParameter):
+    if isinstance(part, semantics.NumericalParameter):
         payload["defaultValue"] = part.numerical_value
     elif isinstance(part, semantics.TextParameter):
         payload["defaultValue"] = part.string_value
     elif (
-        isinstance(part, semantic_benchmark.NumericalVariable)
+        isinstance(part, semantics.NumericalVariable)
         and part.quantity_kind is not None
     ):
         payload["valueReference"] = part.quantity_kind
@@ -250,7 +250,7 @@ def _formal_parameter_payload(
 
 def _add_formal_parameter(
     crate: ROCrate,
-    part: semantic_benchmark.ParameterEntry,
+    part: semantics.ParameterEntry,
     formal_param_registry: dict[tuple[Any, ...], str],
 ) -> dict[str, str]:
     """Add a FormalParameter node once and return its id reference.
@@ -486,7 +486,7 @@ def _load_json(path: Path, cache: dict[Path, Any]) -> Any:
 
 def _extract_evaluated_value(
     run_folder: Path,
-    metric: semantic_benchmark.NumericalVariable,
+    metric: semantics.NumericalVariable,
     json_cache: dict[Path, Any],
 ) -> tuple[Any, Path | None]:
     """Extract one evaluated metric value from a run folder.
@@ -523,7 +523,7 @@ def _extract_evaluated_value(
 
 def _metric_result_payload(
     result_id: str,
-    metric: semantic_benchmark.NumericalVariable,
+    metric: semantics.NumericalVariable,
     value: Any,
 ) -> dict[str, Any]:
     """Create a JSON-LD payload for an evaluated metric result.
@@ -602,7 +602,7 @@ def _run_results_by_name(
 
 def _configuration_entries_for_step(
     configuration_entries: list[ConfigurationEntry],
-    processing_step: semantic_benchmark.ProcessingStep,
+    processing_step: semantics.ProcessingStep,
 ) -> list[ConfigurationEntry]:
     """Filter generated configuration entries by processing step.
 
@@ -624,7 +624,7 @@ def _add_run_actions(
     crate: ROCrate,
     subfolders: list[Path],
     object_ids_by_run: dict[str, str],
-    processing_steps: list[semantic_benchmark.ProcessingStep],
+    processing_steps: list[semantics.ProcessingStep],
     configuration_entries: list[ConfigurationEntry],
     run_results_by_name: dict[str, list[dict[str, str]]],
     software_id: str,
