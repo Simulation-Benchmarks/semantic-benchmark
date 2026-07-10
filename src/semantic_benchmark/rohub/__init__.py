@@ -15,22 +15,11 @@ _DOWNLOAD_EXPORTS = {
 
 def configure_repository_settings(
     rohub_config: dict | None = None,
-    annotation_config: dict | None = None,
 ) -> None:
     """Override packaged settings with repository-specific settings."""
     if rohub_config is not None:
         _provenance.ROHUB_CONFIG = rohub_config
         globals()["ROHUB_CONFIG"] = rohub_config
-
-    if annotation_config is None:
-        return
-
-    annotation_predicate = annotation_config["predicate"]
-
-    _provenance.ANNOTATION_CONFIG = annotation_config
-    _provenance.ANNOTATION_PREDICATE = annotation_predicate
-    globals()["ANNOTATION_CONFIG"] = annotation_config
-    globals()["ANNOTATION_PREDICATE"] = annotation_predicate
 
 
 def __getattr__(name: str):

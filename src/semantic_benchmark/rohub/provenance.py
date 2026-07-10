@@ -24,8 +24,8 @@ def _load_json_config(filename: str) -> dict:
 
 
 ROHUB_CONFIG = _load_json_config("rohub_config.json")
-ANNOTATION_CONFIG = _load_json_config("annotation_config.json")
-ANNOTATION_PREDICATE = ANNOTATION_CONFIG["predicate"]
+ANNOTATION_PREDICATE = "http://w3id.org/nfdi4ing/metadata4ing#investigates"
+BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = "https://schema.org/codeRepository"
 SOFTWARE_USED_PREDICATE = "http://www.w3.org/ns/prov#used"
 
@@ -249,7 +249,7 @@ def login_to_rohub(
 
 def benchmark_annotation_object(benchmark_name: str) -> str:
     """Return the benchmark annotation IRI used for uploaded RO-Crates."""
-    return f"{ANNOTATION_CONFIG['benchmark_base_url']}/{benchmark_name}"
+    return f"{BENCHMARK_BASE_URL}/{benchmark_name}"
 
 
 def build_benchmark_ro_uuids_query(benchmark_name: str) -> str:
@@ -410,12 +410,15 @@ def fetch_benchmark_data(
     benchmark_name: str,
     parameters: Sequence[str],
     metrics: Sequence[str],
+    code_repository_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> pd.DataFrame:
     """Authenticate with RoHub and fetch benchmark parameter/metric data."""
-    main_branch_url = ANNOTATION_CONFIG.get("main_branch_url")
-    if main_branch_url:
-        uuids = find_annotated_ro_uuids(benchmark_name, code_repository_url=main_branch_url)
+    if code_repository_url:
+        uuids = find_annotated_ro_uuids(
+            benchmark_name,
+            code_repository_url=code_repository_url,
+        )
     else:
         uuids = find_benchmark_ro_uuids(benchmark_name)
     named_graphs = find_named_graphs_for_uuids(
@@ -447,6 +450,7 @@ def load_benchmark_metric_data(
     parameters: Sequence[str],
     metrics: Sequence[str],
     tool: str | None = None,
+    code_repository_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> pd.DataFrame:
     """Fetch benchmark metric data from RoHub and optionally filter by tool."""
@@ -455,6 +459,7 @@ def load_benchmark_metric_data(
         benchmark_name=benchmark_name,
         parameters=parameters,
         metrics=metrics,
+        code_repository_url=code_repository_url,
         use_production_rohub=use_production_rohub,
     )
 

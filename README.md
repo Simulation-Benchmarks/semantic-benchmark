@@ -28,6 +28,6 @@ Repository-specific projects can override the packaged RoHub defaults with:
 import semantic_benchmark.rohub as rohub
 
 rohub.configure_repository_settings(
-    annotation_config={...},
+    rohub_config={...},
 )
 ```
