@@ -1,6 +1,6 @@
 """Top-level package exports for semantic-benchmark."""
 
-from semantic_benchmark.semantic import (
+from semantic_benchmark.semantics import (
     BenchmarkLoader,
     FieldMapping,
     IOObject,

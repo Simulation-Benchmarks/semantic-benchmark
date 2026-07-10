@@ -10,11 +10,12 @@ pip install "semantic-benchmark @ git+https://github.com/Simulation-Benchmarks/s
 
 ## Provided Modules
 
-- `semantic_benchmark.semantic`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
+- `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
 - `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
 - `semantic_benchmark.rocrate`: aggregate RO-Crate creation and validation helpers.
 
 The root `semantic_benchmark` package re-exports the semantic classes for backwards compatibility.
+The legacy `semantic_benchmark.semantic` module also remains as a compatibility shim.
 
 `semantic_benchmark.rohub.download_benchmark_resources(...)` downloads the
 software source code and annotation collection resources from a RoHub research
