@@ -54,6 +54,12 @@ def _load_provenance_module():
     return provenance
 
 
+def _load_download_module():
+    from semantic_benchmark.rohub import download
+
+    return download
+
+
 def configure_repository_settings(
     rohub_config: dict | None = None,
 ) -> None:
@@ -66,8 +72,7 @@ def configure_repository_settings(
 
 def __getattr__(name: str):
     if name in _DOWNLOAD_EXPORTS:
-        from semantic_benchmark.rohub import download
-
+        download = _load_download_module()
         value = getattr(download, name)
         globals()[name] = value
         return value
