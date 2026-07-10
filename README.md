@@ -5,7 +5,21 @@ Reusable Python helpers for semantic benchmark descriptions, aggregate RO-Crate 
 ## Install
 
 ```bash
-pip install "semantic-benchmark @ git+https://github.com/Simulation-Benchmarks/semantic-benchmark.git"
+pip install semantic-benchmark
+```
+
+Install optional features with extras:
+
+```bash
+pip install "semantic-benchmark[rocrate]"
+pip install "semantic-benchmark[rohub]"
+pip install "semantic-benchmark[all]"
+```
+
+To install the latest unreleased version directly from GitHub:
+
+```bash
+pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchmarks/semantic-benchmark.git"
 ```
 
 ## Provided Modules
@@ -13,6 +27,10 @@ pip install "semantic-benchmark @ git+https://github.com/Simulation-Benchmarks/s
 - `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
 - `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
 - `semantic_benchmark.rocrate`: aggregate RO-Crate creation and validation helpers.
+
+`semantic_benchmark.semantics` is available from the base installation.
+`semantic_benchmark.rocrate` requires the `rocrate` extra.
+`semantic_benchmark.rohub` requires the `rohub` extra.
 
 The root `semantic_benchmark` package re-exports the semantic classes for backwards compatibility.
 The legacy `semantic_benchmark.semantic` module also remains as a compatibility shim.

@@ -8,8 +8,6 @@ from uuid import UUID
 
 import rohub
 
-from semantic_benchmark.rohub.provenance import login_to_rohub
-
 SOFTWARE_SOURCE_CODE_TYPE = "Software source code"
 ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
 
@@ -83,6 +81,8 @@ def download_benchmark_resources(
     use_production_rohub: bool = False,
 ) -> dict[str, str]:
     """Authenticate with RoHub and download selected benchmark resources."""
+    from semantic_benchmark.rohub.provenance import login_to_rohub
+
     if not zip_resource_filename and not semantic_resource_filename:
         raise ValueError(
             "Provide zip_resource_filename, semantic_resource_filename, or both."
