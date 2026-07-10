@@ -675,22 +675,28 @@ def _add_run_actions(
 
 
 def _configure_crate_metadata(
-    crate: ROCrate, snakemake_id: str, software_name: str
+    crate: ROCrate,
+    snakemake_id: str,
+    crate_license: str,
+    crate_name: str,
+    crate_description: str,
 ) -> None:
     """Set crate-level metadata, profiles, license, and main workflow entity.
 
     Args:
         crate: Aggregate RO-Crate being built.
         snakemake_id: JSON-LD id/path of the main workflow file.
-        software_name: Name of the software application.
+        crate_license: License URL stored on the aggregate RO-Crate.
+        crate_name: Human-readable name stored on the aggregate RO-Crate.
+        crate_description: Description stored on the aggregate RO-Crate.
 
     Returns:
         None. The function mutates crate metadata and root dataset properties.
     """
     crate.mainEntity = {"@id": snakemake_id}
-    crate.license = "https://opensource.org/licenses/MIT"
-    crate.name = f"NFDI4Ing Provenance ({software_name})"
-    crate.description = "Benchmark for linear-elastic plate with a hole"
+    crate.license = crate_license
+    crate.name = crate_name
+    crate.description = crate_description
     crate.metadata["conformsTo"] = ROCRATE_CONFORMS_TO
     crate.root_dataset.append_to("conformsTo", ROOT_DATASET_CONFORMS_TO)
 
@@ -754,6 +760,9 @@ def create_main_ro(
     benchmark_object: semantic_benchmark.SemanticBenchmark,
     rocrate_path: str,
     software_name: str,
+    crate_license: str,
+    crate_name: str,
+    crate_description: str,
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
 ) -> None:
@@ -765,6 +774,9 @@ def create_main_ro(
             and metric nodes.
         rocrate_path: Output zip filename/path for the aggregate crate.
         software_name: Software name recorded as the run action instrument.
+        crate_license: License URL stored on the aggregate RO-Crate.
+        crate_name: Human-readable name stored on the aggregate RO-Crate.
+        crate_description: Description stored on the aggregate RO-Crate.
         validation_profile: Optional RO-Crate profile identifier. When provided,
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
@@ -817,7 +829,13 @@ def create_main_ro(
         run_results_by_name=run_results_by_name,
         software_id=software_id,
     )
-    _configure_crate_metadata(crate, snakemake_id, software_name)
+    _configure_crate_metadata(
+        crate,
+        snakemake_id,
+        crate_license=crate_license,
+        crate_name=crate_name,
+        crate_description=crate_description,
+    )
     _add_software_node(crate, software_id, software_name)
     _add_profile_creative_works(crate)
     _add_workflow_node(crate, subcrates, software_id, snakemake_id)
@@ -872,6 +890,21 @@ def parse_args() -> argparse.Namespace:
         help="Name of the software application recorded in the generated RO-Crate",
     )
     parser.add_argument(
+        "--crate-license",
+        required=True,
+        help="License URL recorded in the generated aggregate RO-Crate",
+    )
+    parser.add_argument(
+        "--crate-name",
+        required=True,
+        help="Name recorded in the generated aggregate RO-Crate",
+    )
+    parser.add_argument(
+        "--crate-description",
+        required=True,
+        help="Description recorded in the generated aggregate RO-Crate",
+    )
+    parser.add_argument(
         "--validation-profile",
         default=None,
         help="Optional RO-Crate profile identifier used to validate the generated crate",
@@ -900,6 +933,9 @@ def main() -> None:
         benchmark_object,
         rocrate_path=args.rocrate_path,
         software_name=args.software_name,
+        crate_license=args.crate_license,
+        crate_name=args.crate_name,
+        crate_description=args.crate_description,
         validation_profile=args.validation_profile,
         validation_dir=args.validation_dir,
     )
