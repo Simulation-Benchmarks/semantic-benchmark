@@ -13,7 +13,7 @@ from typing import Any, TypedDict
 import re
 
 from rocrate.rocrate import ROCrate
-import semantic_benchmark
+from semantic_benchmark import semantic
 from semantic_benchmark.rocrate.validation import validate_rocrate
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
@@ -61,7 +61,7 @@ class ConfigurationEntry(TypedDict):
     """Metadata needed to connect a benchmark configuration to a run action."""
 
     index: int
-    config: semantic_benchmark.ParameterSet
+    config: semantic.ParameterSet
     config_id: str
     processing_step_id: str
 
@@ -237,7 +237,7 @@ def _formal_parameter_payload(
 
     if isinstance(part, semantic_benchmark.NumericalParameter):
         payload["defaultValue"] = part.numerical_value
-    elif isinstance(part, semantic_benchmark.TextParameter):
+    elif isinstance(part, semantic.TextParameter):
         payload["defaultValue"] = part.string_value
     elif (
         isinstance(part, semantic_benchmark.NumericalVariable)
@@ -276,7 +276,7 @@ def _add_formal_parameter(
 
 def _add_configuration_node(
     crate: ROCrate,
-    config: semantic_benchmark.ParameterSet,
+    config: semantic.ParameterSet,
     config_id: str,
     formal_parameter_ids: list[dict[str, str]],
 ) -> None:
@@ -303,7 +303,7 @@ def _add_configuration_node(
 
 def _add_configuration_nodes(
     crate: ROCrate,
-    benchmark_object: semantic_benchmark.SemanticBenchmark,
+    benchmark_object: semantic.SemanticBenchmark,
 ) -> list[ConfigurationEntry]:
     """Add benchmark configuration nodes to the aggregate crate.
 
@@ -549,7 +549,7 @@ def _metric_result_payload(
 
 def _add_evaluates_nodes(
     crate: ROCrate,
-    benchmark_object: semantic_benchmark.SemanticBenchmark,
+    benchmark_object: semantic.SemanticBenchmark,
     subfolders: list[Path],
 ) -> list[RunResultEntry]:
     """Add metric result nodes for all run folders.
@@ -757,7 +757,7 @@ def _add_workflow_node(
 
 def create_main_ro(
     path: str,
-    benchmark_object: semantic_benchmark.SemanticBenchmark,
+    benchmark_object: semantic.SemanticBenchmark,
     rocrate_path: str,
     software_name: str,
     crate_license: str,
@@ -927,7 +927,7 @@ def main() -> None:
     """
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     args = parse_args()
-    benchmark_object = semantic_benchmark.BenchmarkLoader(args.benchmark_file).load()
+    benchmark_object = semantic.BenchmarkLoader(args.benchmark_file).load()
     create_main_ro(
         args.simulation_result_path,
         benchmark_object,
