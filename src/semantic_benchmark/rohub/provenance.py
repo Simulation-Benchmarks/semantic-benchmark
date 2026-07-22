@@ -130,8 +130,8 @@ def _metric_block(
     var_map: dict[str, str],
     name_predicate: str = "schema:name",
 ) -> str:
-    """Build a graph pattern that extracts one run metric."""
-    return _value_block(
+    """Build an optional graph pattern that extracts one run metric."""
+    value_block = _value_block(
         "?runAction",
         "schema:result",
         "metric",
@@ -139,6 +139,8 @@ def _metric_block(
         var_map,
         name_predicate,
     )
+    indented_block = "\n".join(f"  {line}" for line in value_block.splitlines())
+    return f"OPTIONAL {{\n{indented_block}\n}}"
 
 
 def _join_blocks(*blocks: str) -> str:
