@@ -35,6 +35,10 @@ pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchma
 The root `semantic_benchmark` package re-exports the semantic classes for backwards compatibility.
 The legacy `semantic_benchmark.semantic` module also remains as a compatibility shim.
 
+Loaded numerical variables and parameters expose both `unit` (the original
+JSON-LD value) and `unit_iri` (the full IRI expanded through the document's
+namespace bindings). Consumers should use `unit_iri` when creating links.
+
 `semantic_benchmark.rohub.download_benchmark_resources(...)` downloads the
 software source code and annotation collection resources from a RoHub research
 object. The package also exposes the `download-semantic-benchmark` CLI.

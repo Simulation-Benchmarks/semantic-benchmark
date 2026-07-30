@@ -67,6 +67,7 @@ class NumericalVariable(KGNode):
     unit: Optional[str] = None
     quantity_kind: Optional[str] = None
     field_mapping: Optional["FieldMapping"] = None
+    unit_iri: Optional[str] = None
 
 
 @dataclass
@@ -74,6 +75,7 @@ class NumericalParameter(KGNode):
     numerical_value: Optional[float] = None
     unit: Optional[str] = None
     field_mapping: Optional["FieldMapping"] = None
+    unit_iri: Optional[str] = None
 
 
 @dataclass
@@ -81,6 +83,7 @@ class TextParameter(KGNode):
     string_value: Optional[str] = None
     unit: Optional[str] = None
     field_mapping: Optional["FieldMapping"] = None
+    unit_iri: Optional[str] = None
 
 
 @dataclass
@@ -156,6 +159,21 @@ class BenchmarkLoader:
             return None
         return value.toPython() if isinstance(value, Literal) else str(value)
 
+    def _iri(self, subject: URIRef, predicate: URIRef) -> Optional[str]:
+        """Return an RDF resource as a fully expanded IRI when possible."""
+        value = self.graph.value(subject, predicate)
+        if value is None:
+            return None
+
+        iri = str(value)
+        if "://" in iri:
+            return iri
+
+        try:
+            return str(self.graph.namespace_manager.expand_curie(iri))
+        except (KeyError, ValueError):
+            return iri
+
     def _build_field_mapping_index(self) -> dict[str, FieldMapping]:
         mapping_by_variable_id: dict[str, FieldMapping] = {}
         for field_uri in self.graph.subjects(RDF.type, T_FIELD):
@@ -201,6 +219,7 @@ class BenchmarkLoader:
             label=self._label(uri),
             numerical_value=self._scalar(uri, HAS_NUMERICAL_VALUE),
             unit=self._scalar(uri, HAS_UNIT),
+            unit_iri=self._iri(uri, HAS_UNIT),
             field_mapping=self._field_mapping(uri),
         )
 
@@ -210,6 +229,7 @@ class BenchmarkLoader:
             label=self._label(uri),
             string_value=self._scalar(uri, HAS_STRING_VALUE),
             unit=self._scalar(uri, HAS_UNIT),
+            unit_iri=self._iri(uri, HAS_UNIT),
             field_mapping=self._field_mapping(uri),
         )
 
@@ -218,6 +238,7 @@ class BenchmarkLoader:
             id=self._str(uri),
             label=self._label(uri),
             unit=self._scalar(uri, HAS_UNIT),
+            unit_iri=self._iri(uri, HAS_UNIT),
             quantity_kind=self._scalar(uri, HAS_KIND_OF_QTY),
             field_mapping=self._field_mapping(uri),
         )
