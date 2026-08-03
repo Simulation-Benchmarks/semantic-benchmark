@@ -28,11 +28,39 @@ ANNOTATION_PREDICATE = "http://w3id.org/nfdi4ing/metadata4ing#investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = "https://schema.org/codeRepository"
 SOFTWARE_USED_PREDICATE = "http://www.w3.org/ns/prov#used"
-
-
-SCHEMA_PREFIX = "PREFIX schema: <http://schema.org/>"
-FORMAL_PARAMETER_TYPE = "<https://bioschemas.org/FormalParameter>"
 FOAF_NAME = "<http://xmlns.com/foaf/0.1/name>"
+
+
+def build_published_runs_query() -> str:
+    """Build a query for published benchmark runs and their software."""
+    return """
+    PREFIX schemas: <https://schema.org/>
+    PREFIX schema: <http://schema.org/>
+    PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
+    PREFIX prov: <http://www.w3.org/ns/prov#>
+    
+    SELECT DISTINCT ?run_id ?benchmark_url ?benchmark_repo ?software_url ?datePublished ?version
+    WHERE {
+        ?run_id m4i:investigates ?benchmark_repo .
+        ?run_id prov:used ?software_url .
+        ?run_id schema:datePublished ?datePublished .
+        ?benchmark_url schemas:codeRepository ?benchmark_repo .
+        ?benchmark_url schemas:version ?version .
+    }
+    """
+
+
+def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
+    """Build a query resolving published run IRIs to their named graphs."""
+    values = " ".join(f"<{run_id}>" for run_id in run_ids)
+    return f"""
+    PREFIX schema: <http://schema.org/>
+    SELECT ?run_id ?graph
+    WHERE {{
+      VALUES ?run_id {{ {values} }}
+      GRAPH ?graph {{ ?run_id a schema:Dataset . }}
+    }}
+    """
 
 
 def sanitize_variable_name(name: str) -> str:
@@ -85,7 +113,7 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
 def _node_type(node_prefix: str) -> str:
     """Return the RDF type used by a parameter or metric node."""
     if node_prefix == "param":
-        return FORMAL_PARAMETER_TYPE
+        return "<https://bioschemas.org/FormalParameter>"
     return "schema:PropertyValue"
 
 
@@ -188,7 +216,7 @@ def _format_query(
 ) -> str:
     """Format a complete SPARQL query."""
     return f"""
-    {SCHEMA_PREFIX}
+    PREFIX schema: <http://schema.org/>
 
     SELECT {select_vars}
     WHERE {{
