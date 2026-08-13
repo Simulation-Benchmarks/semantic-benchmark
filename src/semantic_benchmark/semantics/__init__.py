@@ -24,8 +24,8 @@ DATA_TYPE = M4I.dataType
 JSON_PATH = CR.jsonPath
 INVESTIGATES = M4I.investigates
 EVALUATES = M4I.evaluates
-USES = URIRef("https://mardi4nfdi.de/mathmoddb#uses")
-DESCRIBED_BY = URIRef("https://mardi4nfdi.de/mathmoddb#describedAsDocumentedBy")
+USES = URIRef("http://www.wikidata.org/entity/P2283")
+DESCRIBED_BY = URIRef("https://mardi4nfdi.github.io/MathModDB/P104")
 REPRESENTS = URIRef("http://semanticscience.org/resource/SIO_000210")
 HAS_SOURCE = CR.source
 HAS_EXTRACT = CR.extract
@@ -91,7 +91,6 @@ class FieldMapping:
     field_id: str
     data_type: Optional[str] = None
     source_id: Optional[str] = None
-    extract_id: Optional[str] = None
     json_path: Optional[str] = None
     file_object_id: Optional[str] = None
     file_object_label: Optional[str] = None
@@ -194,16 +193,12 @@ class BenchmarkLoader:
                 field_id=self._str(field_uri),
                 data_type=self._scalar(field_uri, DATA_TYPE),
                 source_id=self._str(source_uri) if source_uri else None,
-                extract_id=self._str(extract_uri) if extract_uri else None,
                 json_path=self._scalar(extract_uri, JSON_PATH) if extract_uri else None,
                 file_object_id=self._str(file_object_uri) if file_object_uri else None,
                 file_object_label=self._label(file_object_uri) if file_object_uri else None,
             )
             mapping_by_variable_id[variable_id] = mapping
 
-            # Backward-compatible alias:
-            # some benchmark files use field->represents "variable_*" while
-            # benchmark.evaluates references "metric_*" ids for the same concept.
             if "variable_" in variable_id:
                 mapping_by_variable_id[variable_id.replace("variable_", "metric_", 1)] = mapping
             elif "metric_" in variable_id:
