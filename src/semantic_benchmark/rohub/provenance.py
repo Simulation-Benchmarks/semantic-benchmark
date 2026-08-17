@@ -252,6 +252,35 @@ def build_dynamic_query(
     )
 
 
+def build_available_fields_query(named_graphs: Sequence[str]) -> str:
+    """Build a query discovering parameter and metric names in named graphs."""
+    inner_query = f"""
+    {{
+        ?runAction a schema:CreateAction ;
+            schema:object ?configuration .
+        ?configuration a schema:PropertyValue ;
+            schema:exampleOfWork ?field .
+        ?field a <https://bioschemas.org/FormalParameter> ;
+            {FOAF_NAME} ?field_name .
+        BIND("parameter" AS ?field_type)
+    }}
+    UNION
+    {{
+        ?runAction a schema:CreateAction ;
+            schema:result ?field .
+        ?field a schema:PropertyValue ;
+            {FOAF_NAME} ?field_name .
+        BIND("metric" AS ?field_type)
+    }}
+    """.strip()
+
+    return _format_query(
+        "DISTINCT ?field_type ?field_name",
+        _named_graph_values_block(named_graphs, inner_query),
+        "\nORDER BY ?field_type ?field_name",
+    )
+
+
 def configure_rohub(use_production_rohub: bool = False) -> None:
     """Configure RoHub client settings for development or production."""
     environment = "development" if not use_production_rohub else "production"
@@ -360,19 +389,35 @@ def query_metric_data_from_named_graphs(
     return query_sparql(query)
 
 
-def filter_by_tool(data: pd.DataFrame, tool: str | None) -> pd.DataFrame:
-    """Filter RoHub query results by tool name."""
-    if not tool:
-        return data
+def discover_benchmark_fields(
+    named_graphs: Sequence[str],
+) -> tuple[list[str], list[str]]:
+    """Return all parameter and metric names present in named graphs."""
+    if not named_graphs:
+        raise RuntimeError("No RoHub named graphs provided.")
 
-    filtered_df = data[
-        data["tool_name"].astype(str).str.lower() == tool.strip().lower()
-    ].reset_index(drop=True)
+    result = query_sparql(build_available_fields_query(named_graphs))
+    if result.empty:
+        return [], []
 
-    if filtered_df.empty:
-        raise RuntimeError(f"No RoHub data found for tool '{tool}'.")
-
-    return filtered_df
+    field_types = result["field_type"].astype(str)
+    parameters = list(
+        dict.fromkeys(
+            str(name)
+            for name in result.loc[
+                field_types == "parameter", "field_name"
+            ]
+        )
+    )
+    metrics = list(
+        dict.fromkeys(
+            str(name)
+            for name in result.loc[
+                field_types == "metric", "field_name"
+            ]
+        )
+    )
+    return parameters, metrics
 
 
 def find_benchmark_ro_uuids(benchmark_name: str) -> list[str]:
@@ -438,8 +483,8 @@ def find_named_graphs_for_uuids(
 
 def fetch_benchmark_data(
     benchmark_name: str,
-    parameters: Sequence[str],
-    metrics: Sequence[str],
+    parameters: Sequence[str] | None = None,
+    metrics: Sequence[str] | None = None,
     code_repository_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> pd.DataFrame:
@@ -461,6 +506,15 @@ def fetch_benchmark_data(
             f"No RoHub named graphs found for benchmark {benchmark_name}."
         )
 
+    if parameters is None or metrics is None:
+        discovered_parameters, discovered_metrics = discover_benchmark_fields(
+            list(named_graphs.values())
+        )
+        if parameters is None:
+            parameters = discovered_parameters
+        if metrics is None:
+            metrics = discovered_metrics
+
     result = query_metric_data_from_named_graphs(
         parameters=parameters,
         metrics=metrics,
@@ -477,23 +531,20 @@ def fetch_benchmark_data(
 
 def load_benchmark_metric_data(
     benchmark_name: str,
-    parameters: Sequence[str],
-    metrics: Sequence[str],
-    tool: str | None = None,
+    parameters: Sequence[str] | None = None,
+    metrics: Sequence[str] | None = None,
     code_repository_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> pd.DataFrame:
-    """Fetch benchmark metric data from RoHub and optionally filter by tool."""
+    """Fetch data, automatically discovering omitted parameters and metrics."""
     configure_rohub(use_production_rohub)
-    provenance_df = fetch_benchmark_data(
+    return fetch_benchmark_data(
         benchmark_name=benchmark_name,
         parameters=parameters,
         metrics=metrics,
         code_repository_url=code_repository_url,
         use_production_rohub=use_production_rohub,
     )
-
-    return filter_by_tool(provenance_df, tool)
 
 
 def delete_research_objects_by_annotations(
@@ -518,6 +569,7 @@ def delete_research_objects_by_annotations(
             rohub.ros_delete(uuid)
         except SystemExit as e:
             LOGGER.error("Failed to delete research object %s: %s", uuid, e)
+
 
 def upload_research_object(path_to_zip: str) -> tuple[str, str]:
     """Upload an RO-Crate zip to RoHub and return job id and RO UUID."""
