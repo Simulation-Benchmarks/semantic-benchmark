@@ -10,7 +10,7 @@ import shutil
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict, get_args
 
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
@@ -19,7 +19,7 @@ from semantic_benchmark.rocrate.validation import validate_rocrate
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 LOGGER = logging.getLogger(__name__)
 
-WORKFLOW_LANGUAGES = ("nextflow", "snakemake")
+WorkflowLanguage = Literal["nextflow", "snakemake"]
 
 ROCRATE_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/crate/1.1"},
@@ -735,7 +735,7 @@ def _add_workflow_node(
     workflow_path: Path,
     software_id: str,
     workflow_id: str,
-    lang: str,
+    lang: WorkflowLanguage,
 ) -> None:
     """Add the main workflow file to the aggregate crate.
 
@@ -806,10 +806,10 @@ def create_main_ro(
 
     if not input_path.is_dir():
         raise NotADirectoryError(f"{path} is not a valid directory")
-    if lang not in WORKFLOW_LANGUAGES:
+    if lang not in get_args(WorkflowLanguage):
         raise ValueError(
             f"Unsupported workflow language {lang!r}; expected one of "
-            f"{', '.join(WORKFLOW_LANGUAGES)}"
+            f"{', '.join(get_args(WorkflowLanguage))}"
         )
     if not workflow_file.is_file():
         raise FileNotFoundError(f"{workflow_path} is not a valid workflow file")
@@ -926,7 +926,7 @@ def parse_args() -> argparse.Namespace:
         "--lang",
         dest="workflow_lang",
         required=True,
-        choices=WORKFLOW_LANGUAGES,
+        choices=get_args(WorkflowLanguage),
         help="Language of the workflow file",
     )
     parser.add_argument(
