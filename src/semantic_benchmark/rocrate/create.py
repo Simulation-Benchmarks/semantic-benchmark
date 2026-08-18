@@ -768,7 +768,7 @@ def create_main_ro(
     crate_name: str,
     crate_description: str,
     workflow_path: str | Path,
-    lang: str,
+    lang: WorkflowLanguage,
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
 ) -> None:
