@@ -19,7 +19,7 @@ from semantic_benchmark.rocrate.validation import validate_rocrate
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 LOGGER = logging.getLogger(__name__)
 
-WORKFLOW_LANGUAGES = ("cwl", "nextflow", "snakemake", "galaxy")
+WORKFLOW_LANGUAGES = ("nextflow", "snakemake")
 
 ROCRATE_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/crate/1.1"},
@@ -784,8 +784,7 @@ def create_main_ro(
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
         workflow_path: Location of the workflow file to add to the crate.
-        lang: Workflow language. Must be ``cwl``, ``nextflow``, ``snakemake``,
-            or ``galaxy``.
+        lang: Workflow language. Must be ``nextflow`` or ``snakemake``.
         validation_profile: Optional RO-Crate profile identifier. When provided,
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
