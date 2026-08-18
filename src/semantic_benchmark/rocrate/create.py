@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import shutil
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any, TypedDict
-import re
+from typing import Any, Literal, TypedDict, get_args
 
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
@@ -18,6 +18,8 @@ from semantic_benchmark.rocrate.validation import validate_rocrate
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 LOGGER = logging.getLogger(__name__)
+
+WorkflowLanguage = Literal["nextflow", "snakemake"]
 
 ROCRATE_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/crate/1.1"},
@@ -231,9 +233,7 @@ def _formal_parameter_payload(
     payload["additionalType"] = ""
 
     if unit is not None:
-        payload["unitText"] = {
-            "@id": unit
-        }
+        payload["unitText"] = {"@id": unit}
 
     if isinstance(part, semantics.NumericalParameter):
         payload["defaultValue"] = part.numerical_value
@@ -676,7 +676,7 @@ def _add_run_actions(
 
 def _configure_crate_metadata(
     crate: ROCrate,
-    snakemake_id: str,
+    workflow_id: str,
     crate_license: str,
     crate_name: str,
     crate_description: str,
@@ -685,7 +685,7 @@ def _configure_crate_metadata(
 
     Args:
         crate: Aggregate RO-Crate being built.
-        snakemake_id: JSON-LD id/path of the main workflow file.
+        workflow_id: JSON-LD id/path of the main workflow file.
         crate_license: License URL stored on the aggregate RO-Crate.
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
@@ -693,7 +693,7 @@ def _configure_crate_metadata(
     Returns:
         None. The function mutates crate metadata and root dataset properties.
     """
-    crate.mainEntity = {"@id": snakemake_id}
+    crate.mainEntity = {"@id": workflow_id}
     crate.license = crate_license
     crate.name = crate_name
     crate.description = crate_description
@@ -732,26 +732,30 @@ def _add_software_node(crate: ROCrate, software_id: str, software_name: str) -> 
 
 def _add_workflow_node(
     crate: ROCrate,
-    subcrates: list[Path],
+    workflow_path: Path,
     software_id: str,
-    workflow_filename: str,
+    workflow_id: str,
+    lang: WorkflowLanguage,
 ) -> None:
-    """Add the Snakemake workflow file to the aggregate crate.
+    """Add the main workflow file to the aggregate crate.
 
     Args:
         crate: Aggregate RO-Crate being built.
-        subcrates: Collected subcrate zip files; the first subcrate's parent is
-            used to locate the workflow file.
+        workflow_path: Location of the workflow file to add.
         software_id: JSON-LD id of the software application linked as ``hasPart``.
-        workflow_filename: Workflow filename to add from the run folder.
+        workflow_id: JSON-LD id of the workflow file.
+        lang: Workflow language used by the workflow file.
 
     Returns:
         None. The function mutates ``crate``.
     """
     crate.add_workflow(
-        source=str(subcrates[0].parent / workflow_filename),
-        lang="snakemake",
-        properties={"hasPart": {"@id": software_id}},
+        source=str(workflow_path),
+        lang=lang,
+        properties={
+            "hasPart": {"@id": software_id},
+            "mainEntity": {"@id": workflow_id},
+        },
     )
 
 
@@ -763,6 +767,8 @@ def create_main_ro(
     crate_license: str,
     crate_name: str,
     crate_description: str,
+    workflow_path: str | Path,
+    lang: WorkflowLanguage,
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
 ) -> None:
@@ -777,6 +783,8 @@ def create_main_ro(
         crate_license: License URL stored on the aggregate RO-Crate.
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
+        workflow_path: Location of the workflow file to add to the crate.
+        lang: Workflow language. Must be ``nextflow`` or ``snakemake``.
         validation_profile: Optional RO-Crate profile identifier. When provided,
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
@@ -788,13 +796,23 @@ def create_main_ro(
 
     Raises:
         NotADirectoryError: If ``path`` is not a directory.
-        ValueError: If no matching subcrate zip files are found.
+        FileNotFoundError: If ``workflow_path`` is not a file.
+        ValueError: If ``lang`` is unsupported or no matching subcrate zip files
+            are found.
     """
     crate = ROCrate(version="1.1")
     input_path = Path(path)
+    workflow_file = Path(workflow_path)
 
     if not input_path.is_dir():
         raise NotADirectoryError(f"{path} is not a valid directory")
+    if lang not in get_args(WorkflowLanguage):
+        raise ValueError(
+            f"Unsupported workflow language {lang!r}; expected one of "
+            f"{', '.join(get_args(WorkflowLanguage))}"
+        )
+    if not workflow_file.is_file():
+        raise FileNotFoundError(f"{workflow_path} is not a valid workflow file")
 
     LOGGER.info(
         "Creating aggregate RO-Crate from simulation results in %s...",
@@ -816,7 +834,7 @@ def create_main_ro(
     run_results = _add_evaluates_nodes(crate, benchmark_object, subfolders)
     run_results_by_name = _run_results_by_name(run_results)
 
-    snakemake_id = get_workflow_id(subcrates[0])
+    workflow_id = get_workflow_id(subcrates[0], fallback=workflow_file.name)
 
     software_id = str(uuid.uuid4())
 
@@ -831,15 +849,15 @@ def create_main_ro(
     )
     _configure_crate_metadata(
         crate,
-        snakemake_id,
+        workflow_id,
         crate_license=crate_license,
         crate_name=crate_name,
         crate_description=crate_description,
     )
     _add_software_node(crate, software_id, software_name)
     _add_profile_creative_works(crate)
-    _add_workflow_node(crate, subcrates, software_id, snakemake_id)
-    
+    _add_workflow_node(crate, workflow_file, software_id, workflow_id, lang)
+
     crate.write_zip(rocrate_path)
 
     if validation_profile:
@@ -905,6 +923,18 @@ def parse_args() -> argparse.Namespace:
         help="Description recorded in the generated aggregate RO-Crate",
     )
     parser.add_argument(
+        "--lang",
+        dest="workflow_lang",
+        required=True,
+        choices=get_args(WorkflowLanguage),
+        help="Language of the workflow file",
+    )
+    parser.add_argument(
+        "--workflow-path",
+        required=True,
+        help="Path to the workflow file added to the generated RO-Crate",
+    )
+    parser.add_argument(
         "--validation-profile",
         default=None,
         help="Optional RO-Crate profile identifier used to validate the generated crate",
@@ -936,19 +966,22 @@ def main() -> None:
         crate_license=args.crate_license,
         crate_name=args.crate_name,
         crate_description=args.crate_description,
+        workflow_path=args.workflow_path,
+        lang=args.workflow_lang,
         validation_profile=args.validation_profile,
         validation_dir=args.validation_dir,
     )
 
 
-def get_workflow_id(subcrate):
+def get_workflow_id(subcrate: str | Path, fallback: str = "Snakefile") -> str:
+    """Return the computational workflow id stored in a subcrate."""
     crate = ROCrate(subcrate)
 
     for e in crate.get_entities():
-        if e.type == ["File", "SoftwareSourceCode", "ComputationalWorkflow"]:
+        if e.type == ["ComputationalWorkflow"]:
             return e.id
 
-    return "Snakefile"
+    return fallback
 
 
 if __name__ == "__main__":
