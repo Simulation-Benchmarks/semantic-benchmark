@@ -767,8 +767,8 @@ def create_main_ro(
     crate_license: str,
     crate_name: str,
     crate_description: str,
-    workflow_path: str | Path,
-    lang: WorkflowLanguage,
+    workflow_path: str | Path | None = None,
+    lang: WorkflowLanguage = "snakemake",
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
 ) -> None:
@@ -783,8 +783,9 @@ def create_main_ro(
         crate_license: License URL stored on the aggregate RO-Crate.
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
-        workflow_path: Location of the workflow file to add to the crate.
-        lang: Workflow language. Must be ``nextflow`` or ``snakemake``.
+        workflow_path: Location of the workflow file to add to the crate. Defaults
+            to the workflow found alongside the first subcrate.
+        lang: Workflow language. Defaults to ``snakemake``.
         validation_profile: Optional RO-Crate profile identifier. When provided,
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
@@ -796,13 +797,12 @@ def create_main_ro(
 
     Raises:
         NotADirectoryError: If ``path`` is not a directory.
-        FileNotFoundError: If ``workflow_path`` is not a file.
+        FileNotFoundError: If the explicit or inferred workflow path is not a file.
         ValueError: If ``lang`` is unsupported or no matching subcrate zip files
             are found.
     """
     crate = ROCrate(version="1.1")
     input_path = Path(path)
-    workflow_file = Path(workflow_path)
 
     if not input_path.is_dir():
         raise NotADirectoryError(f"{path} is not a valid directory")
@@ -811,9 +811,6 @@ def create_main_ro(
             f"Unsupported workflow language {lang!r}; expected one of "
             f"{', '.join(get_args(WorkflowLanguage))}"
         )
-    if not workflow_file.is_file():
-        raise FileNotFoundError(f"{workflow_path} is not a valid workflow file")
-
     LOGGER.info(
         "Creating aggregate RO-Crate from simulation results in %s...",
         input_path,
@@ -834,7 +831,17 @@ def create_main_ro(
     run_results = _add_evaluates_nodes(crate, benchmark_object, subfolders)
     run_results_by_name = _run_results_by_name(run_results)
 
-    workflow_id = get_workflow_id(subcrates[0], fallback=workflow_file.name)
+    workflow_id = get_workflow_id(
+        subcrates[0],
+        fallback=Path(workflow_path).name if workflow_path is not None else "Snakefile",
+    )
+    workflow_file = (
+        Path(workflow_path)
+        if workflow_path is not None
+        else subcrates[0].parent / workflow_id
+    )
+    if not workflow_file.is_file():
+        raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
 
     software_id = str(uuid.uuid4())
 
@@ -925,14 +932,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--lang",
         dest="workflow_lang",
-        required=True,
+        default="snakemake",
         choices=get_args(WorkflowLanguage),
-        help="Language of the workflow file",
+        help="Language of the workflow file (default: snakemake)",
     )
     parser.add_argument(
         "--workflow-path",
-        required=True,
-        help="Path to the workflow file added to the generated RO-Crate",
+        default=None,
+        help=(
+            "Path to the workflow file added to the generated RO-Crate "
+            "(default: workflow alongside the first subcrate)"
+        ),
     )
     parser.add_argument(
         "--validation-profile",
