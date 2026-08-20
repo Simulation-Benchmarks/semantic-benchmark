@@ -1,0 +1,13 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix m4i: <http://w3id.org/nfdi4ing/metadata4ing#> .
+@prefix cr: <http://mlcommons.org/croissant/> .
+@prefix obo: <http://purl.obolibrary.org/obo/> .
+
+m4i:ProcessingStepShape a sh:NodeShape ;
+    sh:targetClass m4i:ProcessingStep ;
+    sh:property [ sh:path rdfs:label ; sh:minCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path obo:RO_0002233 ; sh:class cr:FileObject ] ;
+    sh:property [ sh:path obo:RO_0002234 ; sh:class cr:FileObject ] ;
+    sh:property [ sh:path m4i:usesConfiguration ; sh:class m4i:ParameterSet ] .
