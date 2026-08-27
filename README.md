@@ -27,6 +27,8 @@ pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchma
 - `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
 - `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
 - `semantic_benchmark.rocrate`: aggregate RO-Crate creation and validation helpers.
+- `semantic_benchmark.runner`: shared parameter-file, workspace, provenance reporter,
+  archive, logging, and aggregate RO-Crate helpers for project benchmark runners.
 
 `semantic_benchmark.semantics` is available from the base installation.
 `semantic_benchmark.rocrate` requires the `rocrate` extra.
