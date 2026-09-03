@@ -90,14 +90,22 @@ class BenchmarkLoader:
             raise ValueError(f"No bundled SHACL .ttl files found in: {shapes_directory}")
         return files
 
-    def _validate(self) -> tuple[bool, str]:
-        shapes_graph = Graph()
-        for shape_file in self._shape_files():
-            shapes_graph.parse(str(shape_file), format="turtle")
+    @classmethod
+    def load_shapes(cls) -> Graph:
+        """Return the bundled SHACL shapes as one RDF graph.
 
+        The returned graph can be inspected, queried, or serialized with the
+        standard :class:`rdflib.Graph` API.
+        """
+        shapes_graph = Graph()
+        for shape_file in cls._shape_files():
+            shapes_graph.parse(str(shape_file), format="turtle")
+        return shapes_graph
+
+    def _validate(self) -> tuple[bool, str]:
         conforms, _, report_text = validate(
             data_graph=self.graph,
-            shacl_graph=shapes_graph,
+            shacl_graph=self.load_shapes(),
             inference="rdfs",
             abort_on_first=False,
             allow_infos=True,
