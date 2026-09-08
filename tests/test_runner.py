@@ -1,4 +1,8 @@
 import json
+import os
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -11,6 +15,35 @@ from semantic_benchmark.runner import (
     prepare_configuration,
     resolve_unit_symbol,
 )
+
+
+def test_runner_import_does_not_require_optional_rocrate_dependency():
+    script = """
+import importlib.abc
+import sys
+
+class BlockROCrate(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "rocrate" or fullname.startswith("rocrate."):
+            raise ModuleNotFoundError("blocked optional rocrate dependency")
+        return None
+
+sys.meta_path.insert(0, BlockROCrate())
+import semantic_benchmark.runner
+"""
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(Path(__file__).parents[1] / "src"),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 def test_reporter_always_uses_provenance_run_crate_profile():

@@ -9,7 +9,6 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import Any, Mapping
 
-from . import rocrate
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
@@ -179,6 +178,10 @@ def create_aggregate_rocrate(
     validation_dir: Path | None = None,
 ) -> None:
     """Create the aggregate RO-Crate shared by benchmark runners."""
+    # RO-Crate support is optional. Import it only when this feature is used so
+    # the core runner helpers remain available without the ``rocrate`` extra.
+    from . import rocrate
+
     options = {}
     if validation_dir is not None:
         options["validation_dir"] = validation_dir
