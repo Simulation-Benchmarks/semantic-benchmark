@@ -32,6 +32,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+test = [
+    "pytest",
+]
 rocrate = [
     "rocrate",
     "roc-validator",
