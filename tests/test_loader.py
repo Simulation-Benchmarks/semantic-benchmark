@@ -41,19 +41,24 @@ def test_minimal_plate_with_hole_configuration_conforms(tmp_path):
     assert not loader.validation_log_path.exists()
 
 
-@pytest.mark.parametrize("version_property", ["schema:version", "http://schema.org/version"])
-def test_benchmark_version_variants_are_validated_and_loaded(
-    tmp_path, version_property
-):
+def test_benchmark_https_schema_version_is_validated_and_loaded(tmp_path):
+    loader = _validate(tmp_path, json.loads(FIXTURE.read_text(encoding="utf-8")))
+    benchmark = loader.load()
+
+    assert loader.conforms
+    assert benchmark.version == "1.0.0"
+
+
+def test_benchmark_http_schema_version_is_ignored_by_loader(tmp_path):
     document = json.loads(FIXTURE.read_text(encoding="utf-8"))
     version = _node(document, "local:benchmark").pop("schema:version")
-    _node(document, "local:benchmark")[version_property] = version
+    _node(document, "local:benchmark")["http://schema.org/version"] = version
 
     loader = _validate(tmp_path, document)
     benchmark = loader.load()
 
     assert loader.conforms
-    assert benchmark.version == "1.0.0"
+    assert benchmark.version is None
 
 
 def test_minimal_configuration_demarshal_loads_expected_benchmark(tmp_path):

@@ -49,7 +49,6 @@ from semantic_benchmark.semantics.vocabulary import (
     USES,
     USES_CONFIG,
     VERSION,
-    VERSION_ALT,
 )
 
 
@@ -274,9 +273,7 @@ class BenchmarkLoader:
         research_problem_uri = self.graph.value(benchmark_uri, INVESTIGATES)
         model_uri = self.graph.value(benchmark_uri, USES)
         publication_uri = self.graph.value(benchmark_uri, DESCRIBED_BY)
-        version = self._scalar(benchmark_uri, VERSION) or self._scalar(
-            benchmark_uri, VERSION_ALT
-        )
+        version = self._scalar(benchmark_uri, VERSION)
 
         return SemanticBenchmark(
             id=self._str(benchmark_uri),

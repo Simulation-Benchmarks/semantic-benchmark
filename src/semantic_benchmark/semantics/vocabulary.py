@@ -26,7 +26,6 @@ REPRESENTS = URIRef("http://semanticscience.org/resource/SIO_000210")
 HAS_SOURCE = CR.source
 HAS_EXTRACT = CR.extract
 VERSION = SCHEMA.version
-VERSION_ALT = URIRef("http://schema.org/version")
 
 HAS_FILE_OBJECT = URIRef("http://mlcommons.org/croissant/FileObject")
 HAS_FILE_OBJECT_ALT = URIRef("http://mlcommons.org/croissant/fileObject")
