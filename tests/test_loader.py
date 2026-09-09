@@ -9,14 +9,17 @@ from semantic_benchmark import BenchmarkLoader
 
 
 FIXTURE = Path(__file__).parent / "fixtures" / "minimal_configuration.json"
+SH_NODE_SHAPE = URIRef("http://www.w3.org/ns/shacl#NodeShape")
+M4I_BENCHMARK = URIRef("http://w3id.org/nfdi4ing/metadata4ing#Benchmark")
+SH_TARGET_CLASS = URIRef("http://www.w3.org/ns/shacl#targetClass")
 
 
 def test_load_shapes_exposes_bundled_shacl_graph():
     shapes = BenchmarkLoader.load_shapes()
-    node_shape = URIRef("http://www.w3.org/ns/shacl#NodeShape")
 
     assert len(shapes) > 0
-    assert next(shapes.subjects(RDF.type, node_shape), None) is not None
+    assert next(shapes.subjects(RDF.type, SH_NODE_SHAPE), None) is not None
+    assert next(shapes.subjects(SH_TARGET_CLASS, M4I_BENCHMARK), None) is not None
     assert "NodeShape" in shapes.serialize(format="turtle")
 
 
@@ -36,6 +39,21 @@ def test_minimal_plate_with_hole_configuration_conforms(tmp_path):
     assert loader.conforms
     assert "Conforms: True" in loader.validation_report
     assert not loader.validation_log_path.exists()
+
+
+@pytest.mark.parametrize("version_property", ["schema:version", "http://schema.org/version"])
+def test_benchmark_version_variants_are_validated_and_loaded(
+    tmp_path, version_property
+):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    version = _node(document, "local:benchmark").pop("schema:version")
+    _node(document, "local:benchmark")[version_property] = version
+
+    loader = _validate(tmp_path, document)
+    benchmark = loader.load()
+
+    assert loader.conforms
+    assert benchmark.version == "1.0.0"
 
 
 def test_minimal_configuration_demarshal_loads_expected_benchmark(tmp_path):
@@ -245,3 +263,18 @@ def test_invalid_document_writes_the_validation_report(tmp_path):
     log = loader.validation_log_path.read_text(encoding="utf-8")
     assert "SHACL validation failed" in log
     assert "MinCountConstraintComponent" in log
+
+
+def test_invalid_document_still_loads_with_partial_data(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, "local:benchmark")["label"]
+
+    loader = _validate(tmp_path, document)
+    benchmark = loader.load()
+
+    assert not loader.conforms
+    assert benchmark.id == "https://example.org/plate-with-hole/benchmark"
+    assert benchmark.label is None
+    assert benchmark.version == "1.0.0"
+    assert len(benchmark.evaluates) == 1
+    assert len(benchmark.parameter_sets) == 1
