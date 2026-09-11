@@ -234,7 +234,6 @@ def test_data_source_extract_requires_a_string_json_path(tmp_path):
     [
         ("local:benchmark", "investigates"),
         ("local:benchmark", "uses"),
-        ("local:benchmark", "has parameter set"),
     ],
 )
 def test_optional_benchmark_links_can_be_omitted(tmp_path, node_id, property_name):
@@ -247,10 +246,52 @@ def test_optional_benchmark_links_can_be_omitted(tmp_path, node_id, property_nam
     assert loader.conforms
     if property_name == "investigates":
         assert benchmark.investigates is None
-    elif property_name == "uses":
-        assert benchmark.uses == []
     else:
-        assert benchmark.parameter_sets == []
+        assert benchmark.uses == []
+
+
+def test_missing_parameter_sets_raise_a_runtime_error(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, "local:benchmark")["has parameter set"]
+
+    loader = _validate(tmp_path, document)
+
+    assert loader.conforms
+    with pytest.raises(ValueError, match="m4i:hasParameterSet"):
+        loader.load()
+
+
+def test_missing_parameter_set_identifier_raises_a_runtime_error(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, "local:configuration")["identifier"]
+
+    loader = _validate(tmp_path, document)
+
+    assert not loader.conforms
+    with pytest.raises(ValueError, match="m4i:identifier"):
+        loader.load()
+
+
+def test_missing_parameter_label_raises_a_runtime_error(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, "local:radius")["label"]
+
+    loader = _validate(tmp_path, document)
+
+    assert not loader.conforms
+    with pytest.raises(ValueError, match="missing rdfs:label"):
+        loader.load()
+
+
+def test_missing_parameter_value_raises_a_runtime_error(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, "local:radius")["has numerical value"]
+
+    loader = _validate(tmp_path, document)
+
+    assert loader.conforms
+    with pytest.raises(ValueError, match="m4i:hasNumericalValue"):
+        loader.load()
 
 
 def test_benchmark_loads_multiple_models(tmp_path):

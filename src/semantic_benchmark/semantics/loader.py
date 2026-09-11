@@ -267,6 +267,91 @@ class BenchmarkLoader:
             ],
         )
 
+    @staticmethod
+    def _runtime_requirement_errors(
+        benchmark: SemanticBenchmark,
+    ) -> list[str]:
+        """Return missing runtime requirements for benchmark execution.
+
+        These checks are intentionally narrower than SHACL validation. They
+        capture the fields the benchmark runners need in order to generate
+        configuration parameter files and launch workflows successfully.
+        """
+        errors: list[str] = []
+
+        if not benchmark.parameter_sets:
+            errors.append(
+                "benchmark must define at least one parameter set via "
+                "m4i:hasParameterSet"
+            )
+            return errors
+
+        for parameter_set in benchmark.parameter_sets:
+            parameter_set_name = parameter_set.label or parameter_set.id
+
+            if not parameter_set.identifier:
+                errors.append(
+                    f"parameter set {parameter_set_name!r} is missing "
+                    "m4i:identifier"
+                )
+
+            if not parameter_set.parts:
+                errors.append(
+                    f"parameter set {parameter_set_name!r} must contain at least "
+                    "one parameter entry"
+                )
+                continue
+
+            for parameter in parameter_set.parts:
+                parameter_name = parameter.label or parameter.id
+
+                if not parameter.label:
+                    errors.append(
+                        f"parameter {parameter.id!r} in parameter set "
+                        f"{parameter_set_name!r} is missing rdfs:label"
+                    )
+
+                if isinstance(parameter, TextParameter):
+                    if parameter.string_value is None:
+                        errors.append(
+                            f"text parameter {parameter_name!r} in parameter set "
+                            f"{parameter_set_name!r} is missing "
+                            "m4i:hasStringValue"
+                        )
+                    continue
+
+                if isinstance(parameter, NumericalParameter):
+                    if parameter.numerical_value is None:
+                        errors.append(
+                            f"numerical parameter {parameter_name!r} in "
+                            f"parameter set {parameter_set_name!r} is missing "
+                            "m4i:hasNumericalValue"
+                        )
+                    continue
+
+                errors.append(
+                    f"parameter {parameter_name!r} in parameter set "
+                    f"{parameter_set_name!r} has no scalar value that can be "
+                    "written to parameters.json; define m4i:hasNumericalValue "
+                    "or m4i:hasStringValue"
+                )
+
+        return errors
+
+    @classmethod
+    def _raise_for_missing_runtime_requirements(
+        cls,
+        benchmark: SemanticBenchmark,
+    ) -> None:
+        """Raise ``ValueError`` when runtime-required benchmark data is missing."""
+        errors = cls._runtime_requirement_errors(benchmark)
+        if errors:
+            details = "\n".join(f"- {error}" for error in errors)
+            raise ValueError(
+                "Benchmark JSON-LD is missing runtime-required properties:\n"
+                f"{details}"
+            )
+
     def load(self) -> SemanticBenchmark:
         benchmark_uri = next(self.graph.subjects(RDF.type, T_BENCHMARK), None)
         if benchmark_uri is None:
@@ -275,7 +360,7 @@ class BenchmarkLoader:
         publication_uri = self.graph.value(benchmark_uri, DESCRIBED_BY)
         version = self._scalar(benchmark_uri, VERSION)
 
-        return SemanticBenchmark(
+        benchmark = SemanticBenchmark(
             id=self._str(benchmark_uri),
             label=self._label(benchmark_uri),
             version=version,
@@ -319,3 +404,5 @@ class BenchmarkLoader:
                 for step in self.graph.subjects(RDF.type, T_PROCESSING_STEP)
             ],
         )
+        self._raise_for_missing_runtime_requirements(benchmark)
+        return benchmark
