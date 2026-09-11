@@ -39,7 +39,7 @@ def main() -> int:
         "  investigates: "
         f"{benchmark.investigates.label if benchmark.investigates else None}"
     )
-    print(f"  uses: {benchmark.uses.label if benchmark.uses else None}")
+    print(f"  uses: {[model.label for model in benchmark.uses]}")
 
     print("  evaluates:")
     for metric in benchmark.evaluates:
