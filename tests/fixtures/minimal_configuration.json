@@ -88,6 +88,7 @@
     },
     {
       "@id": "local:radius",
+      "@type": "numerical variable",
       "label": "radius",
       "has numerical value": 0.33,
       "has unit": {"@id": "unit:M"}

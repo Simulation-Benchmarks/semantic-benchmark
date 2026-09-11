@@ -93,7 +93,7 @@ class ProcessingStep(KGNode):
 class SemanticBenchmark(KGNode):
     version: Optional[str] = None
     investigates: Optional[ResearchProblem] = None
-    uses: Optional[MathematicalModel] = None
+    uses: list[MathematicalModel] = field(default_factory=list)
     evaluates: list[NumericalVariable] = field(default_factory=list)
     parameter_sets: list[ParameterSet] = field(default_factory=list)
     described_by: Optional[Publication] = None

@@ -222,6 +222,8 @@ class BenchmarkLoader:
     def build_parameter_entry(self, uri: URIRef) -> ParameterEntry:
         if self.graph.value(uri, HAS_STRING_VALUE):
             return self.build_text_parameter(uri)
+        if self.graph.value(uri, HAS_NUMERICAL_VALUE):
+            return self.build_numerical_parameter(uri)
         if (uri, RDF.type, T_NUMERICAL_VARIABLE) in self.graph:
             return self.build_numerical_variable(uri)
         return self.build_numerical_parameter(uri)
@@ -270,8 +272,6 @@ class BenchmarkLoader:
         if benchmark_uri is None:
             raise ValueError("No m4i:Benchmark node found.")
 
-        research_problem_uri = self.graph.value(benchmark_uri, INVESTIGATES)
-        model_uri = self.graph.value(benchmark_uri, USES)
         publication_uri = self.graph.value(benchmark_uri, DESCRIBED_BY)
         version = self._scalar(benchmark_uri, VERSION)
 
@@ -279,22 +279,25 @@ class BenchmarkLoader:
             id=self._str(benchmark_uri),
             label=self._label(benchmark_uri),
             version=version,
-            investigates=(
-                ResearchProblem(
-                    id=self._str(research_problem_uri),
-                    label=self._label(research_problem_uri),
-                )
-                if research_problem_uri
-                else None
+            investigates=next(
+                (
+                    ResearchProblem(
+                        id=self._str(research_problem_uri),
+                        label=self._label(research_problem_uri),
+                    )
+                    for research_problem_uri in self.graph.objects(
+                        benchmark_uri, INVESTIGATES
+                    )
+                ),
+                None,
             ),
-            uses=(
+            uses=[
                 MathematicalModel(
                     id=self._str(model_uri),
                     label=self._label(model_uri),
                 )
-                if model_uri
-                else None
-            ),
+                for model_uri in self.graph.objects(benchmark_uri, USES)
+            ],
             evaluates=[
                 self.build_numerical_variable(metric)
                 for metric in self.graph.objects(benchmark_uri, EVALUATES)

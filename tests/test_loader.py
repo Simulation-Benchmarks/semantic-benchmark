@@ -74,9 +74,9 @@ def test_minimal_configuration_demarshal_loads_expected_benchmark(tmp_path):
     assert benchmark.investigates.id == "https://example.org/plate-with-hole/problem"
     assert benchmark.investigates.label == "Plate with a hole"
 
-    assert benchmark.uses is not None
-    assert benchmark.uses.id == "https://example.org/plate-with-hole/model"
-    assert benchmark.uses.label == "Linear elasticity model"
+    assert len(benchmark.uses) == 1
+    assert benchmark.uses[0].id == "https://example.org/plate-with-hole/model"
+    assert benchmark.uses[0].label == "Linear elasticity model"
 
     assert len(benchmark.evaluates) == 1
     metric = benchmark.evaluates[0]
@@ -133,10 +133,7 @@ def test_minimal_configuration_demarshal_loads_expected_benchmark(tmp_path):
     ("node_id", "property_name", "expected_path"),
     [
         ("local:benchmark", "label", "rdfs:label"),
-        ("local:benchmark", "investigates", "m4i:investigates"),
-        ("local:benchmark", "uses", "wd:P2283"),
         ("local:benchmark", "evaluates", "m4i:evaluates"),
-        ("local:benchmark", "has parameter set", "m4i:hasParameterSet"),
         ("local:problem", "label", "rdfs:label"),
         ("local:model", "label", "rdfs:label"),
         ("local:metric", "label", "rdfs:label"),
@@ -230,6 +227,82 @@ def test_data_source_extract_requires_a_string_json_path(tmp_path):
     assert not loader.conforms
     assert "MinCountConstraintComponent" in loader.validation_report
     assert "cr:jsonPath" in loader.validation_report
+
+
+@pytest.mark.parametrize(
+    ("node_id", "property_name"),
+    [
+        ("local:benchmark", "investigates"),
+        ("local:benchmark", "uses"),
+        ("local:benchmark", "has parameter set"),
+    ],
+)
+def test_optional_benchmark_links_can_be_omitted(tmp_path, node_id, property_name):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    del _node(document, node_id)[property_name]
+
+    loader = _validate(tmp_path, document)
+    benchmark = loader.load()
+
+    assert loader.conforms
+    if property_name == "investigates":
+        assert benchmark.investigates is None
+    elif property_name == "uses":
+        assert benchmark.uses == []
+    else:
+        assert benchmark.parameter_sets == []
+
+
+def test_benchmark_loads_multiple_models(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["@graph"].extend(
+        [
+            {
+                "@id": "local:model-2",
+                "@type": "mathmod:MathematicalModel",
+                "label": "Plane stress approximation",
+            },
+        ]
+    )
+    benchmark_node = _node(document, "local:benchmark")
+    benchmark_node["uses"] = [
+        benchmark_node["uses"],
+        {"@id": "local:model-2"},
+    ]
+
+    loader = _validate(tmp_path, document)
+    benchmark = loader.load()
+
+    assert loader.conforms
+    assert [model.id for model in benchmark.uses] == [
+        "https://example.org/plate-with-hole/model",
+        "https://example.org/plate-with-hole/model-2",
+    ]
+    assert [model.label for model in benchmark.uses] == [
+        "Linear elasticity model",
+        "Plane stress approximation",
+    ]
+
+
+def test_benchmark_rejects_multiple_research_problems(tmp_path):
+    document = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    document["@graph"].append(
+        {
+            "@id": "local:problem-2",
+            "@type": "mathmod:ResearchProblem",
+            "label": "Stress concentration analysis",
+        }
+    )
+    benchmark_node = _node(document, "local:benchmark")
+    benchmark_node["investigates"] = [
+        benchmark_node["investigates"],
+        {"@id": "local:problem-2"},
+    ]
+
+    loader = _validate(tmp_path, document)
+
+    assert not loader.conforms
+    assert "MaxCountConstraintComponent" in loader.validation_report
 
 
 @pytest.mark.parametrize(
