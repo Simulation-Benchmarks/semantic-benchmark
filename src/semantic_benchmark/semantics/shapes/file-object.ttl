@@ -1,0 +1,10 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix cr: <http://mlcommons.org/croissant/> .
+@prefix schema: <https://schema.org/> .
+
+cr:FileObjectShape a sh:NodeShape ;
+    sh:targetClass cr:FileObject ;
+    sh:property [ sh:path rdfs:label ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path schema:encodingFormat ; sh:maxCount 1 ; sh:datatype xsd:string ] .

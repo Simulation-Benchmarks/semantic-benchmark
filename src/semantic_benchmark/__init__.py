@@ -1,37 +1,4 @@
 """Top-level package exports for semantic-benchmark."""
 
-from semantic_benchmark.semantics import (
-    BenchmarkLoader,
-    FieldMapping,
-    IOObject,
-    KGNode,
-    MathematicalModel,
-    NumericalParameter,
-    NumericalVariable,
-    ParameterEntry,
-    ParameterSet,
-    ProcessingStep,
-    Publication,
-    ResearchProblem,
-    SemanticBenchmark,
-    TextParameter,
-    Tool,
-)
-
-__all__ = [
-    "BenchmarkLoader",
-    "FieldMapping",
-    "IOObject",
-    "KGNode",
-    "MathematicalModel",
-    "NumericalParameter",
-    "NumericalVariable",
-    "ParameterEntry",
-    "ParameterSet",
-    "ProcessingStep",
-    "Publication",
-    "ResearchProblem",
-    "SemanticBenchmark",
-    "TextParameter",
-    "Tool",
-]
+from semantic_benchmark.semantics import *  # noqa: F401,F403
+from semantic_benchmark.semantics import __all__
