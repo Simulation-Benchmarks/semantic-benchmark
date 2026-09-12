@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
 from uuid import UUID
 
 import rohub
-
-SOFTWARE_SOURCE_CODE_TYPE = "Software source code"
-ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
 
 LOGGER = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
@@ -26,9 +24,25 @@ def validate_uuid(value: str) -> str:
     return value
 
 
-def select_resource_identifier(resources, resource_type: str) -> str:
-    """Return the single resource identifier matching the requested RoHub type."""
-    required_columns = {"identifier", "type"}
+def _matching_resource_names(resource) -> set[str]:
+    """Build comparable resource names from a RoHub resource row."""
+    candidates = set()
+    for column in ("name", "filename", "title"):
+        value = resource.get(column)
+        if isinstance(value, str) and value:
+            candidates.add(value)
+            candidates.add(Path(value).name)
+
+    path_value = resource.get("path")
+    if isinstance(path_value, str) and path_value:
+        candidates.add(path_value)
+        candidates.add(Path(path_value).name)
+    return candidates
+
+
+def select_resource_identifier(resources, resource_name: str) -> str:
+    """Return the single resource identifier matching the requested resource name."""
+    required_columns = {"identifier"}
     missing_columns = required_columns.difference(resources.columns)
     if missing_columns:
         raise ValueError(
@@ -36,35 +50,51 @@ def select_resource_identifier(resources, resource_type: str) -> str:
             + ", ".join(sorted(missing_columns))
         )
 
-    matching_resources = resources.loc[
-        resources["type"] == resource_type, "identifier"
-    ].dropna()
-
-    if matching_resources.empty:
-        raise ValueError(f"No resource found with type: {resource_type}")
-
-    if len(matching_resources) > 1:
+    if not {"name", "filename", "title", "path"}.intersection(resources.columns):
         raise ValueError(
-            f"Expected one resource with type '{resource_type}', "
-            f"found {len(matching_resources)}."
+            "Resource list is missing any supported name columns: "
+            "name, filename, title, path"
         )
 
-    return str(matching_resources.iloc[0])
+    requested_name = Path(resource_name).name
+    candidate_resources = resources
+    if "source" in resources.columns:
+        internal_resources = resources.loc[resources["source"] == "internal"]
+        if not internal_resources.empty:
+            candidate_resources = internal_resources
+
+    matching_identifiers = []
+    for _, resource in candidate_resources.iterrows():
+        if requested_name in _matching_resource_names(resource):
+            identifier = resource.get("identifier")
+            if identifier:
+                matching_identifiers.append(str(identifier))
+
+    if not matching_identifiers:
+        raise ValueError(f"No resource found with name: {requested_name}")
+
+    if len(matching_identifiers) > 1:
+        raise ValueError(
+            f"Expected one resource named '{requested_name}', "
+            f"found {len(matching_identifiers)}."
+        )
+
+    return matching_identifiers[0]
 
 
 def download_benchmark_resource(
     identifier: str,
     resource_filename: str,
-    resource_type: str,
+    resource_name: str,
 ) -> str:
-    """Load a research object and download its resource of the given type."""
+    """Load a research object and download its named resource."""
     research_object = rohub.ros_load(identifier)
     resources = research_object.list_resources()
-    resource_identifier = select_resource_identifier(resources, resource_type)
+    resource_identifier = select_resource_identifier(resources, resource_name)
 
     LOGGER.info(
-        "Downloading %s resource %s to %s",
-        resource_type,
+        "Downloading resource %s (%s) to %s",
+        resource_name,
         resource_identifier,
         resource_filename,
     )
@@ -76,17 +106,14 @@ def download_benchmark_resources(
     identifier: str,
     username: str,
     password: str,
-    zip_resource_filename: str | None = None,
     semantic_resource_filename: str | None = None,
     use_production_rohub: bool = False,
 ) -> dict[str, str]:
-    """Authenticate with RoHub and download selected benchmark resources."""
+    """Authenticate with RoHub and download the semantic benchmark resource."""
     from semantic_benchmark.rohub.provenance import login_to_rohub
 
-    if not zip_resource_filename and not semantic_resource_filename:
-        raise ValueError(
-            "Provide zip_resource_filename, semantic_resource_filename, or both."
-        )
+    if not semantic_resource_filename:
+        raise ValueError("Provide semantic_resource_filename.")
 
     login_to_rohub(
         username=username,
@@ -94,27 +121,13 @@ def download_benchmark_resources(
         use_production_rohub=use_production_rohub,
     )
 
-    downloaded_resources = {}
-
-    if zip_resource_filename:
-        downloaded_resources[SOFTWARE_SOURCE_CODE_TYPE] = (
-            download_benchmark_resource(
-                identifier=identifier,
-                resource_filename=zip_resource_filename,
-                resource_type=SOFTWARE_SOURCE_CODE_TYPE,
-            )
-        )
-
-    if semantic_resource_filename:
-        downloaded_resources[ANNOTATION_COLLECTION_TYPE] = (
-            download_benchmark_resource(
-                identifier=identifier,
-                resource_filename=semantic_resource_filename,
-                resource_type=ANNOTATION_COLLECTION_TYPE,
-            )
-        )
-
-    return downloaded_resources
+    resource_name = Path(semantic_resource_filename).name
+    resource_identifier = download_benchmark_resource(
+        identifier=identifier,
+        resource_filename=semantic_resource_filename,
+        resource_name=resource_name,
+    )
+    return {"semantic_resource": resource_identifier}
 
 
 def parse_args(argv=None):
@@ -141,16 +154,10 @@ def parse_args(argv=None):
         help="Password for RoHub.",
     )
     parser.add_argument(
-        "--zip-resource-filename",
-        type=str,
-        default=None,
-        help="Output filename for the Software source code resource.",
-    )
-    parser.add_argument(
         "--semantic-resource-filename",
         type=str,
-        default=None,
-        help="Output filename for the Annotation Collection resource.",
+        required=True,
+        help="Output filename for the semantic benchmark resource.",
     )
     parser.add_argument(
         "--use-production-rohub",
@@ -168,7 +175,6 @@ def main() -> None:
         identifier=args.identifier,
         username=args.username,
         password=args.password,
-        zip_resource_filename=args.zip_resource_filename,
         semantic_resource_filename=args.semantic_resource_filename,
         use_production_rohub=args.use_production_rohub,
     )
