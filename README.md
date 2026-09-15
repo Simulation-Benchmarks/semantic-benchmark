@@ -42,8 +42,8 @@ JSON-LD value) and `unit_iri` (the full IRI expanded through the document's
 namespace bindings). Consumers should use `unit_iri` when creating links.
 
 `semantic_benchmark.rohub.download_benchmark_resources(...)` downloads the
-semantic benchmark file from a RoHub research object by matching its resource
-name from `list_resources()`. The package also exposes the
+semantic benchmark file from a RoHub research object by selecting the
+`Annotation Collection` resource from `list_resources()`. The package also exposes the
 `download-semantic-benchmark` CLI.
 
 `semantic_benchmark.rocrate.create_main_ro(...)` can validate the generated

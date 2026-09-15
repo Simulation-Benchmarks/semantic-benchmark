@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import argparse
 import logging
-from pathlib import Path
 from uuid import UUID
 
 import rohub
 
 LOGGER = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
+ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
 
 
 def validate_uuid(value: str) -> str:
@@ -24,25 +24,9 @@ def validate_uuid(value: str) -> str:
     return value
 
 
-def _matching_resource_names(resource) -> set[str]:
-    """Build comparable resource names from a RoHub resource row."""
-    candidates = set()
-    for column in ("name", "filename", "title"):
-        value = resource.get(column)
-        if isinstance(value, str) and value:
-            candidates.add(value)
-            candidates.add(Path(value).name)
-
-    path_value = resource.get("path")
-    if isinstance(path_value, str) and path_value:
-        candidates.add(path_value)
-        candidates.add(Path(path_value).name)
-    return candidates
-
-
-def select_resource_identifier(resources, resource_name: str) -> str:
-    """Return the single resource identifier matching the requested resource name."""
-    required_columns = {"identifier"}
+def select_resource_identifier(resources, resource_type: str) -> str:
+    """Return the single resource identifier matching the requested RoHub type."""
+    required_columns = {"identifier", "type"}
     missing_columns = required_columns.difference(resources.columns)
     if missing_columns:
         raise ValueError(
@@ -50,51 +34,35 @@ def select_resource_identifier(resources, resource_name: str) -> str:
             + ", ".join(sorted(missing_columns))
         )
 
-    if not {"name", "filename", "title", "path"}.intersection(resources.columns):
+    matching_resources = resources.loc[
+        resources["type"] == resource_type, "identifier"
+    ].dropna()
+
+    if matching_resources.empty:
+        raise ValueError(f"No resource found with type: {resource_type}")
+
+    if len(matching_resources) > 1:
         raise ValueError(
-            "Resource list is missing any supported name columns: "
-            "name, filename, title, path"
+            f"Expected one resource with type '{resource_type}', "
+            f"found {len(matching_resources)}."
         )
 
-    requested_name = Path(resource_name).name
-    candidate_resources = resources
-    if "source" in resources.columns:
-        internal_resources = resources.loc[resources["source"] == "internal"]
-        if not internal_resources.empty:
-            candidate_resources = internal_resources
-
-    matching_identifiers = []
-    for _, resource in candidate_resources.iterrows():
-        if requested_name in _matching_resource_names(resource):
-            identifier = resource.get("identifier")
-            if identifier:
-                matching_identifiers.append(str(identifier))
-
-    if not matching_identifiers:
-        raise ValueError(f"No resource found with name: {requested_name}")
-
-    if len(matching_identifiers) > 1:
-        raise ValueError(
-            f"Expected one resource named '{requested_name}', "
-            f"found {len(matching_identifiers)}."
-        )
-
-    return matching_identifiers[0]
+    return str(matching_resources.iloc[0])
 
 
 def download_benchmark_resource(
     identifier: str,
     resource_filename: str,
-    resource_name: str,
+    resource_type: str,
 ) -> str:
-    """Load a research object and download its named resource."""
+    """Load a research object and download its resource of the given type."""
     research_object = rohub.ros_load(identifier)
     resources = research_object.list_resources()
-    resource_identifier = select_resource_identifier(resources, resource_name)
+    resource_identifier = select_resource_identifier(resources, resource_type)
 
     LOGGER.info(
-        "Downloading resource %s (%s) to %s",
-        resource_name,
+        "Downloading %s resource %s to %s",
+        resource_type,
         resource_identifier,
         resource_filename,
     )
@@ -121,11 +89,10 @@ def download_benchmark_resources(
         use_production_rohub=use_production_rohub,
     )
 
-    resource_name = Path(semantic_resource_filename).name
     resource_identifier = download_benchmark_resource(
         identifier=identifier,
         resource_filename=semantic_resource_filename,
-        resource_name=resource_name,
+        resource_type=ANNOTATION_COLLECTION_TYPE,
     )
     return {"semantic_resource": resource_identifier}
 
