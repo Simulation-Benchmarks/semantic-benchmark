@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID
+from zipfile import ZipFile
 
 import rohub
 
 LOGGER = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
+RO_CRATE_TYPE = "RO-Crate"
 ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
 
 
@@ -74,14 +78,18 @@ def download_benchmark_resources(
     identifier: str,
     username: str,
     password: str,
+    path: str | None = None,
     semantic_resource_filename: str | None = None,
     use_production_rohub: bool = False,
 ) -> dict[str, str]:
-    """Authenticate with RoHub and download the semantic benchmark resource."""
-    from semantic_benchmark.rohub.provenance import login_to_rohub
+    """Export and unpack the complete RO-Crate and optionally download annotations.
 
-    if not semantic_resource_filename:
-        raise ValueError("Provide semantic_resource_filename.")
+    The RO-Crate is extracted into ``path`` (the current directory by default).
+    The temporary ZIP is removed.
+    Returned identifiers belong to the RO for ``RO-Crate`` and to the selected
+    resource for ``Annotation Collection``.
+    """
+    from semantic_benchmark.rohub.provenance import login_to_rohub
 
     login_to_rohub(
         username=username,
@@ -89,12 +97,38 @@ def download_benchmark_resources(
         use_production_rohub=use_production_rohub,
     )
 
-    resource_identifier = download_benchmark_resource(
-        identifier=identifier,
-        resource_filename=semantic_resource_filename,
-        resource_type=ANNOTATION_COLLECTION_TYPE,
-    )
-    return {"semantic_resource": resource_identifier}
+    downloaded_resources = {}
+
+    extraction_path = Path(path or ".")
+    LOGGER.info("Exporting RO-Crate %s into %s", identifier, extraction_path)
+    with TemporaryDirectory(prefix="rohub-crate-") as temporary_path:
+        rohub.ros_export_to_rocrate(
+            identifier=identifier,
+            filename="rocrate",
+            path=temporary_path,
+            use_format="zip",
+        )
+        with ZipFile(Path(temporary_path) / "rocrate.zip") as archive:
+            destination = extraction_path.resolve()
+            for member in archive.infolist():
+                target = (destination / member.filename).resolve()
+                if not target.is_relative_to(destination):
+                    raise ValueError(f"Unsafe RO-Crate archive path: {member.filename}")
+            extraction_path.mkdir(parents=True, exist_ok=True)
+            archive.extractall(extraction_path)
+    LOGGER.info("Extracted RO-Crate to %s", extraction_path)
+    downloaded_resources[RO_CRATE_TYPE] = identifier
+
+    if semantic_resource_filename:
+        downloaded_resources[ANNOTATION_COLLECTION_TYPE] = (
+            download_benchmark_resource(
+                identifier=identifier,
+                resource_filename=semantic_resource_filename,
+                resource_type=ANNOTATION_COLLECTION_TYPE,
+            )
+        )
+
+    return downloaded_resources
 
 
 def parse_args(argv=None):
@@ -121,10 +155,16 @@ def parse_args(argv=None):
         help="Password for RoHub.",
     )
     parser.add_argument(
+        "--path",
+        type=str,
+        default=None,
+        help="Destination directory for the extracted RO-Crate contents (default: current directory).",
+    )
+    parser.add_argument(
         "--semantic-resource-filename",
         type=str,
-        required=True,
-        help="Output filename for the semantic benchmark resource.",
+        default=None,
+        help="Output filename for the Annotation Collection resource.",
     )
     parser.add_argument(
         "--use-production-rohub",
@@ -142,6 +182,7 @@ def main() -> None:
         identifier=args.identifier,
         username=args.username,
         password=args.password,
+        path=args.path,
         semantic_resource_filename=args.semantic_resource_filename,
         use_production_rohub=args.use_production_rohub,
     )

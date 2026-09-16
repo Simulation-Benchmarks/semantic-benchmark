@@ -52,6 +52,7 @@ Issues = "https://github.com/Simulation-Benchmarks/semantic-benchmark/issues"
 [project.scripts]
 create-semantic-benchmark-rocrate = "semantic_benchmark.rocrate.create:main"
 download-semantic-benchmark = "semantic_benchmark.rohub.download:main"
+upload-semantic-benchmark = "semantic_benchmark.rohub.upload:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
