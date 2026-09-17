@@ -7,14 +7,31 @@ import sys
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
-from semantic_benchmark import BenchmarkLoader
+from semantic_benchmark import BenchmarkLoader, runner
+
+UNIT_SYMBOLS = {
+    "M": "m",
+    "METRE": "m",
+    "METER": "m",
+    "PA": "Pa",
+    "PASCAL": "Pa",
+}
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Validate and load a semantic benchmark JSON-LD file."
+        description="Validate, load, and generate parameter files for a semantic benchmark."
     )
     parser.add_argument("jsonld_file", type=Path, help="Path to the JSON-LD benchmark file")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("generated_parameters"),
+        help=(
+            "Directory for generated parameter files (default: generated_parameters). "
+            "Existing parameters_*.json files in this directory are replaced."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -69,6 +86,13 @@ def main() -> int:
         print(f"      inputs: {[item.label for item in step.inputs]}")
         print(f"      outputs: {[item.label for item in step.outputs]}")
         print(f"      configurations: {[cfg.identifier for cfg in step.configurations]}")
+
+    output_dir = args.output_dir.expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    parameter_files = runner.create_parameter_files(benchmark, output_dir, UNIT_SYMBOLS)
+    print(f"\nCreated {len(parameter_files)} parameter files in {output_dir}:")
+    for parameter_file in parameter_files:
+        print(f"  {parameter_file.name}")
 
     return 0
 
