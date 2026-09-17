@@ -397,3 +397,111 @@ def test_invalid_document_still_loads_with_partial_data(tmp_path):
     assert benchmark.version == "1.0.0"
     assert len(benchmark.evaluates) == 1
     assert len(benchmark.parameter_sets) == 1
+
+
+def _sweep_document():
+    document = json.loads(FIXTURE.read_text())
+    document['@context']['has string value'] = {'@id': 'm4i:hasStringValue'}
+    _node(document, 'local:radius')['has numerical value'] = [0, 2]
+    document['@graph'].append({
+        '@id': 'local:cell', '@type': 'numerical variable',
+        'label': 'cell_type', 'has string value': ['triangle', 'quadrilateral'],
+    })
+    document['@graph'].append({
+        '@id': 'local:degree', 'label': 'degree', 'has numerical value': 1,
+    })
+    _node(document, 'local:configuration')['has part'] = [
+        {'@id': 'local:radius'}, {'@id': 'local:cell'}, {'@id': 'local:degree'},
+    ]
+    return document
+
+
+def test_array_parameters_expand_and_write_scalar_files(tmp_path):
+    from semantic_benchmark import runner
+
+    loader = _validate(tmp_path, _sweep_document())
+    assert loader.conforms
+    benchmark = loader.load()
+    assert len(benchmark.parameter_sets) == 4
+    assert benchmark.processing_steps[0].configurations == benchmark.parameter_sets
+    assert len({config.id for config in benchmark.parameter_sets}) == 4
+    assert [config.identifier for config in benchmark.parameter_sets] == [
+        'minimal--1', 'minimal--2', 'minimal--3', 'minimal--4',
+    ]
+    paths = runner.create_parameter_files(benchmark, tmp_path, {'M': 'm'}, strict_units=True)
+    payloads = [json.loads(path.read_text()) for path in paths]
+    assert {(p['cell_type'], p['radius[m]'], p['degree']) for p in payloads} == {
+        ('triangle', 0, 1), ('triangle', 2, 1),
+        ('quadrilateral', 0, 1), ('quadrilateral', 2, 1),
+    }
+    for config in benchmark.parameter_sets:
+        radius = next(part for part in config.parts if part.label == 'radius')
+        assert radius.unit_iri == 'https://qudt.org/vocab/unit/M'
+    assert loader.load() == benchmark
+
+
+def test_sweep_order_is_independent_of_array_and_part_order(tmp_path):
+    document = _sweep_document()
+    expected = _validate(tmp_path, document).load()
+    _node(document, 'local:radius')['has numerical value'].reverse()
+    _node(document, 'local:cell')['has string value'].reverse()
+    _node(document, 'local:configuration')['has part'].reverse()
+    assert _validate(tmp_path, document).load().parameter_sets == expected.parameter_sets
+
+
+@pytest.mark.parametrize('value', [0, [0], [0, 0]])
+def test_single_numeric_choice_keeps_original_identifier(tmp_path, value):
+    document = json.loads(FIXTURE.read_text())
+    _node(document, 'local:radius')['has numerical value'] = value
+    config = _validate(tmp_path, document).load().parameter_sets[0]
+    assert config.identifier == 'minimal'
+    assert config.parts[0].numerical_value == 0
+
+
+def test_empty_array_is_rejected_as_missing_value(tmp_path):
+    document = json.loads(FIXTURE.read_text())
+    _node(document, 'local:radius')['has numerical value'] = []
+    with pytest.raises(ValueError, match='no scalar value'):
+        _validate(tmp_path, document).load()
+
+
+def test_expansion_rejects_identifier_collision(tmp_path):
+    document = _sweep_document()
+    document['@graph'].append({
+        '@id': 'local:other', 'identifier': 'minimal--1',
+        'has part': {'@id': 'local:degree'},
+    })
+    _node(document, 'local:benchmark')['has parameter set'] = [
+        {'@id': 'local:configuration'}, {'@id': 'local:other'},
+    ]
+    with pytest.raises(ValueError, match='duplicate configuration identifier'):
+        _validate(tmp_path, document).load()
+
+
+def test_empty_string_is_a_text_parameter(tmp_path):
+    document = _sweep_document()
+    _node(document, 'local:cell')['has string value'] = ''
+    benchmark = _validate(tmp_path, document).load()
+    assert len(benchmark.parameter_sets) == 2
+    for config in benchmark.parameter_sets:
+        assert next(p for p in config.parts if p.label == 'cell_type').string_value == ''
+
+
+def test_scalar_and_array_templates_expand_independently(tmp_path):
+    document = _sweep_document()
+    document['@graph'].append({
+        '@id': 'local:scalar', 'identifier': 'scalar',
+        'has part': {'@id': 'local:degree'},
+    })
+    refs = [{'@id': 'local:configuration'}, {'@id': 'local:scalar'}]
+    _node(document, 'local:benchmark')['has parameter set'] = refs
+    _node(document, 'local:simulation')['has configuration'] = refs
+    benchmark = _validate(tmp_path, document).load()
+    assert len(benchmark.parameter_sets) == 5
+    assert benchmark.processing_steps[0].configurations == benchmark.parameter_sets
+    scalar = next(c for c in benchmark.parameter_sets if c.identifier == 'scalar')
+    assert scalar.id == 'https://example.org/plate-with-hole/scalar'
+    assert scalar.parts[0].numerical_value == 1
+    first, second = benchmark.parameter_sets[:2]
+    first.parts[0].label = 'changed'
+    assert second.parts[0].label != 'changed'

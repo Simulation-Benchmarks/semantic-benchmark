@@ -48,7 +48,7 @@ class NumericalVariable(KGNode):
 
 @dataclass
 class NumericalParameter(KGNode):
-    numerical_value: Optional[float] = None
+    numerical_value: float | list[float] | None = None
     unit: Optional[str] = None
     field_mapping: Optional[FieldMapping] = None
     unit_iri: Optional[str] = None
@@ -56,7 +56,7 @@ class NumericalParameter(KGNode):
 
 @dataclass
 class TextParameter(KGNode):
-    string_value: Optional[str] = None
+    string_value: str | list[str] | None = None
     unit: Optional[str] = None
     field_mapping: Optional[FieldMapping] = None
     unit_iri: Optional[str] = None

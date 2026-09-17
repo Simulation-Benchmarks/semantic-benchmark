@@ -1,0 +1,214 @@
+{
+  "@context": {
+    "local": "https://example.org/plate-with-hole/",
+    "@vocab": "http://w3id.org/nfdi4ing/metadata4ing#",
+    "m4i": "http://w3id.org/nfdi4ing/metadata4ing#",
+    "mathmod": "https://mardi4nfdi.github.io/MathModDB/",
+    "schema": "https://schema.org/",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "cr": "http://mlcommons.org/croissant/",
+    "obo": "http://purl.obolibrary.org/obo/",
+    "sio": "http://semanticscience.org/resource/",
+    "wd": "http://www.wikidata.org/entity/",
+    "unit": "https://qudt.org/vocab/unit/",
+    "quantitykind": "http://qudt.org/vocab/quantitykind/",
+    "label": {
+      "@id": "rdfs:label"
+    },
+    "Field": {
+      "@id": "cr:Field"
+    },
+    "processing step": {
+      "@id": "m4i:ProcessingStep"
+    },
+    "numerical variable": {
+      "@id": "m4i:NumericalVariable"
+    },
+    "has part": {
+      "@id": "obo:BFO_0000051"
+    },
+    "has input": {
+      "@id": "obo:RO_0002233"
+    },
+    "has output": {
+      "@id": "obo:RO_0002234"
+    },
+    "has parameter set": {
+      "@id": "m4i:hasParameterSet"
+    },
+    "has configuration": {
+      "@id": "m4i:usesConfiguration"
+    },
+    "has unit": {
+      "@id": "m4i:hasUnit"
+    },
+    "has numerical value": {
+      "@id": "m4i:hasNumericalValue"
+    },
+    "has quantity kind": {
+      "@id": "m4i:hasKindOfQuantity"
+    },
+    "investigates": {
+      "@id": "m4i:investigates"
+    },
+    "evaluates": {
+      "@id": "m4i:evaluates"
+    },
+    "uses": {
+      "@id": "wd:P2283"
+    },
+    "represents": {
+      "@id": "sio:SIO_000210"
+    },
+    "source": {
+      "@id": "cr:source"
+    },
+    "extract": {
+      "@id": "cr:extract"
+    },
+    "jsonPath": {
+      "@id": "cr:jsonPath"
+    },
+    "file object": {
+      "@id": "cr:FileObject"
+    },
+    "has string value": {
+      "@id": "m4i:hasStringValue"
+    }
+  },
+  "@graph": [
+    {
+      "@id": "local:benchmark",
+      "@type": "m4i:Benchmark",
+      "label": "Linear-elastic plate with a hole",
+      "investigates": {
+        "@id": "local:problem"
+      },
+      "uses": {
+        "@id": "local:model"
+      },
+      "evaluates": {
+        "@id": "local:metric"
+      },
+      "has parameter set": {
+        "@id": "local:configuration"
+      },
+      "schema:version": "1.0.0"
+    },
+    {
+      "@id": "local:problem",
+      "@type": "mathmod:ResearchProblem",
+      "label": "Plate with a hole"
+    },
+    {
+      "@id": "local:model",
+      "@type": "mathmod:MathematicalModel",
+      "label": "Linear elasticity model"
+    },
+    {
+      "@id": "local:metric",
+      "@type": "numerical variable",
+      "label": "maximum displacement error",
+      "has unit": {
+        "@id": "unit:M"
+      },
+      "has quantity kind": {
+        "@id": "quantitykind:Displacement"
+      }
+    },
+    {
+      "@id": "local:field",
+      "@type": "Field",
+      "dataType": {
+        "@id": "schema:Double"
+      },
+      "represents": {
+        "@id": "local:metric"
+      },
+      "source": {
+        "@id": "local:source"
+      }
+    },
+    {
+      "@id": "local:source",
+      "@type": "cr:DataSource",
+      "extract": {
+        "jsonPath": "/max_displacement_error/"
+      },
+      "file object": {
+        "@id": "local:summary-file"
+      }
+    },
+    {
+      "@id": "local:summary-file",
+      "@type": "cr:FileObject",
+      "label": "solution_metrics.json",
+      "schema:encodingFormat": "application/json"
+    },
+    {
+      "@id": "local:parameter-file",
+      "@type": "cr:FileObject",
+      "label": "parameters.json",
+      "schema:encodingFormat": "application/json"
+    },
+    {
+      "@id": "local:radius",
+      "@type": "numerical variable",
+      "label": "radius",
+      "has numerical value": [
+        0.1,
+        0.33
+      ],
+      "has unit": {
+        "@id": "unit:M"
+      }
+    },
+    {
+      "@id": "local:configuration",
+      "@type": "m4i:ParameterSet",
+      "label": "Minimal configuration",
+      "identifier": "minimal",
+      "has part": [
+        {
+          "@id": "local:radius"
+        },
+        {
+          "@id": "local:cell_type"
+        },
+        {
+          "@id": "local:degree"
+        }
+      ]
+    },
+    {
+      "@id": "local:simulation",
+      "@type": "processing step",
+      "label": "Simulation run",
+      "has input": {
+        "@id": "local:parameter-file"
+      },
+      "has output": {
+        "@id": "local:summary-file"
+      },
+      "has configuration": {
+        "@id": "local:configuration"
+      }
+    },
+    {
+      "@id": "local:cell_type",
+      "label": "cell_type",
+      "has string value": [
+        "triangle",
+        "quadrilateral"
+      ]
+    },
+    {
+      "@id": "local:degree",
+      "label": "isoparametric_element_degree",
+      "has numerical value": [
+        1,
+        2
+      ]
+    }
+  ]
+}

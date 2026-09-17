@@ -72,3 +72,58 @@ rohub.configure_repository_settings(
     rohub_config={...},
 )
 ```
+
+## Parameter sweeps with JSON-LD arrays
+
+A parameter's `has numerical value` or `has string value` may be a scalar or
+an array of alternatives. For example, reference both of these nodes from the
+same parameter set's `has part` property:
+
+```json
+[
+  {
+    "@id": "local:cell_type",
+    "label": "cell_type",
+    "has string value": ["triangle", "quadrilateral"]
+  },
+  {
+    "@id": "local:degree",
+    "label": "isoparametric_element_degree",
+    "has numerical value": [1, 2]
+  }
+]
+```
+
+Use a JSON-LD context mapping these value properties to `m4i:hasStringValue`
+and `m4i:hasNumericalValue`, as in the existing examples. `BenchmarkLoader.load()`
+expands each parameter set independently into the Cartesian product: this
+example produces four configurations. Scalars are repeated in every combination.
+All loaded configuration parts contain scalar values, so solvers and
+`runner.create_parameter_files()` continue to receive ordinary scalar parameters.
+Processing-step configuration references expand identically for provenance.
+
+A template identified as `sweep` produces identifiers `sweep--1`, `sweep--2`,
+etc., and corresponding `parameters_sweep--1.json` files. Its node IDs receive
+the same suffixes. Scalar-only sets and arrays with one distinct choice retain
+the original IDs and identifiers. Identifier collisions raise an error instead
+of overwriting output files.
+
+JSON-LD arrays represent unordered RDF alternatives, so duplicate RDF values
+collapse. Expansion sorts parameter IRIs and RDF value spellings to give stable
+identifiers regardless of array order (this is lexical, not numerical ordering).
+Empty arrays have no value and are rejected for runtime parameters. The lower-level
+`build_parameter_set()` returns a template whose values may be lists;
+`build_parameter_sets()` and `load()` return expanded scalar configurations.
+
+When testing this feature from a local checkout, install the modified package
+into the Python environment used by the benchmark runner:
+
+```bash
+python -m pip install -e ../semantic-benchmark
+```
+
+Run that command from a sibling benchmark repository. Add `[all]` to the local
+package path if the workflow also needs the optional provenance dependencies.
+
+See [the complete array example](examples/array-configurations.json), which
+combines two radii, two cell types, and two element degrees into eight runs.
