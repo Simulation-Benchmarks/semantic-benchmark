@@ -27,7 +27,7 @@ pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchma
 - `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
 - `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
 - `semantic_benchmark.rocrate`: aggregate RO-Crate creation and validation helpers.
-- `semantic_benchmark.runner`: shared parameter-file, workspace, provenance reporter,
+- `semantic_benchmark.runner`: shared parameter-file, workspace, resource staging,
   archive, logging, and aggregate RO-Crate helpers for project benchmark runners.
 
 `semantic_benchmark.semantics` is available from the base installation.
@@ -42,8 +42,22 @@ JSON-LD value) and `unit_iri` (the full IRI expanded through the document's
 namespace bindings). Consumers should use `unit_iri` when creating links.
 
 `semantic_benchmark.rohub.download_benchmark_resources(...)` downloads the
-software source code and annotation collection resources from a RoHub research
-object. The package also exposes the `download-semantic-benchmark` CLI.
+requested benchmark resources from a RoHub research object. The semantic file
+is selected from the `Annotation Collection` resource in `list_resources()`.
+Passing `path="benchmark"` (CLI: `--path benchmark`) exports the complete research
+object using `ros_export_to_rocrate(..., use_format="zip")` and extracts its
+contents directly into `benchmark/`. If `path` / `--path` is omitted, the crate
+is extracted into the current directory. The directory is created if needed, and
+the temporary ZIP is removed afterward. The returned mapping contains the research object identifier
+under `RO-Crate` and the annotation resource identifier under
+`Annotation Collection` for the requested downloads.
+The package also exposes the
+`download-semantic-benchmark` CLI.
+
+`upload-semantic-benchmark` calls `upload_provenance_rocrate(...)` directly.
+It accepts `--provenance_folderpath` (the RO-Crate ZIP), `--benchmark-name`,
+`--username`, `--password`, and optional `--code-repository-url`,
+`--used-software-url`, and `--use-production-rohub` arguments.
 
 `semantic_benchmark.rocrate.create_main_ro(...)` can validate the generated
 aggregate crate by passing `validation_profile`. The package writes the RO-Crate

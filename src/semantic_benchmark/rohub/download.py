@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import argparse
 import logging
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID
+from zipfile import ZipFile
 
 import rohub
 
-SOFTWARE_SOURCE_CODE_TYPE = "Software source code"
-ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
-
 LOGGER = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
+RO_CRATE_TYPE = "RO-Crate"
+ANNOTATION_COLLECTION_TYPE = "Annotation Collection"
 
 
 def validate_uuid(value: str) -> str:
@@ -76,17 +78,18 @@ def download_benchmark_resources(
     identifier: str,
     username: str,
     password: str,
-    zip_resource_filename: str | None = None,
+    path: str | None = None,
     semantic_resource_filename: str | None = None,
     use_production_rohub: bool = False,
 ) -> dict[str, str]:
-    """Authenticate with RoHub and download selected benchmark resources."""
-    from semantic_benchmark.rohub.provenance import login_to_rohub
+    """Export and unpack the complete RO-Crate and optionally download annotations.
 
-    if not zip_resource_filename and not semantic_resource_filename:
-        raise ValueError(
-            "Provide zip_resource_filename, semantic_resource_filename, or both."
-        )
+    The RO-Crate is extracted into ``path`` (the current directory by default).
+    The temporary ZIP is removed.
+    Returned identifiers belong to the RO for ``RO-Crate`` and to the selected
+    resource for ``Annotation Collection``.
+    """
+    from semantic_benchmark.rohub.provenance import login_to_rohub
 
     login_to_rohub(
         username=username,
@@ -96,14 +99,25 @@ def download_benchmark_resources(
 
     downloaded_resources = {}
 
-    if zip_resource_filename:
-        downloaded_resources[SOFTWARE_SOURCE_CODE_TYPE] = (
-            download_benchmark_resource(
-                identifier=identifier,
-                resource_filename=zip_resource_filename,
-                resource_type=SOFTWARE_SOURCE_CODE_TYPE,
-            )
+    extraction_path = Path(path or ".")
+    LOGGER.info("Exporting RO-Crate %s into %s", identifier, extraction_path)
+    with TemporaryDirectory(prefix="rohub-crate-") as temporary_path:
+        rohub.ros_export_to_rocrate(
+            identifier=identifier,
+            filename="rocrate",
+            path=temporary_path,
+            use_format="zip",
         )
+        with ZipFile(Path(temporary_path) / "rocrate.zip") as archive:
+            destination = extraction_path.resolve()
+            for member in archive.infolist():
+                target = (destination / member.filename).resolve()
+                if not target.is_relative_to(destination):
+                    raise ValueError(f"Unsafe RO-Crate archive path: {member.filename}")
+            extraction_path.mkdir(parents=True, exist_ok=True)
+            archive.extractall(extraction_path)
+    LOGGER.info("Extracted RO-Crate to %s", extraction_path)
+    downloaded_resources[RO_CRATE_TYPE] = identifier
 
     if semantic_resource_filename:
         downloaded_resources[ANNOTATION_COLLECTION_TYPE] = (
@@ -141,10 +155,10 @@ def parse_args(argv=None):
         help="Password for RoHub.",
     )
     parser.add_argument(
-        "--zip-resource-filename",
+        "--path",
         type=str,
         default=None,
-        help="Output filename for the Software source code resource.",
+        help="Destination directory for the extracted RO-Crate contents (default: current directory).",
     )
     parser.add_argument(
         "--semantic-resource-filename",
@@ -168,7 +182,7 @@ def main() -> None:
         identifier=args.identifier,
         username=args.username,
         password=args.password,
-        zip_resource_filename=args.zip_resource_filename,
+        path=args.path,
         semantic_resource_filename=args.semantic_resource_filename,
         use_production_rohub=args.use_production_rohub,
     )

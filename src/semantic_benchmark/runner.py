@@ -32,6 +32,21 @@ def create_shared_directory(benchmark_dir: Path, name: str) -> Path:
     return shared_dir
 
 
+def stage_resource_directory(resource_dir: Path, benchmark_dir: Path) -> None:
+    """Copy benchmark support files into a workflow directory."""
+    source_dir = resource_dir.expanduser().resolve()
+    destination_dir = benchmark_dir.expanduser().resolve()
+    if source_dir == destination_dir:
+        return
+
+    for item in source_dir.iterdir():
+        destination = destination_dir / item.name
+        if item.is_dir():
+            shutil.copytree(item, destination, dirs_exist_ok=True)
+        else:
+            shutil.copy2(item, destination)
+
+
 def resolve_unit_symbol(unit: str, unit_symbols: Mapping[str, str]) -> str | None:
     """Resolve a unit by exact spelling or by its URI/CURIE fragment."""
     if unit in unit_symbols:
@@ -95,16 +110,20 @@ def prepare_benchmark(
     unit_symbols: Mapping[str, str],
     *,
     archive: Path | None = None,
+    resource_dir: Path | None = None,
     shared_directories: Iterable[str] = (),
     strict_units: bool = False,
 ) -> SemanticBenchmark:
     """Prepare common inputs and load a semantic benchmark run.
 
-    Optionally extracts a workflow archive, creates shared workflow
-    directories, and always generates the configuration parameter files.
+    Optionally extracts a workflow archive, stages benchmark resources, creates
+    shared workflow directories, and always generates the configuration
+    parameter files.
     """
     if archive is not None:
         extract_archive(archive, benchmark_dir)
+    if resource_dir is not None:
+        stage_resource_directory(resource_dir, benchmark_dir)
     for directory_name in shared_directories:
         create_shared_directory(benchmark_dir, directory_name)
 

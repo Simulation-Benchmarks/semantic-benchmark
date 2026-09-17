@@ -1,8 +1,6 @@
 """RoHub helpers for semantic benchmark provenance."""
 
 _DOWNLOAD_EXPORTS = {
-    "ANNOTATION_COLLECTION_TYPE",
-    "SOFTWARE_SOURCE_CODE_TYPE",
     "download_benchmark_resource",
     "download_benchmark_resources",
     "select_resource_identifier",

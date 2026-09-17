@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "semantic-benchmark"
-version = "0.2.0"
+version = "0.2.1"
 description = "Reusable helpers for semantic benchmark metadata, RO-Crate aggregation, and RoHub provenance workflows."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -52,6 +52,7 @@ Issues = "https://github.com/Simulation-Benchmarks/semantic-benchmark/issues"
 [project.scripts]
 create-semantic-benchmark-rocrate = "semantic_benchmark.rocrate.create:main"
 download-semantic-benchmark = "semantic_benchmark.rohub.download:main"
+upload-semantic-benchmark = "semantic_benchmark.rohub.upload:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
