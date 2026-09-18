@@ -39,11 +39,12 @@ def build_published_runs_query() -> str:
     PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
     PREFIX prov: <http://www.w3.org/ns/prov#>
     
-    SELECT DISTINCT ?run_id ?benchmark_url ?benchmark_repo ?software_url ?datePublished ?version
+    SELECT DISTINCT ?run_id ?benchmark_url ?branch_url ?benchmark_repo ?software_url ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_repo .
         ?run_id prov:used ?software_url .
         ?run_id schema:datePublished ?datePublished .
+        ?run_id schemas:codeRepository ?branch_url .
         ?benchmark_url schemas:codeRepository ?benchmark_repo .
         ?benchmark_url schemas:version ?version .
     }
