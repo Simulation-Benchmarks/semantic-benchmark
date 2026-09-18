@@ -1,5 +1,7 @@
 """JSON-LD loading and SHACL validation for semantic benchmarks."""
 
+from dataclasses import replace
+from itertools import product
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -135,6 +137,15 @@ class BenchmarkLoader:
             return None
         return value.toPython() if isinstance(value, Literal) else str(value)
 
+    def _parameter_value(self, subject: URIRef, predicate: URIRef):
+        """Read RDF alternatives deterministically (JSON-LD arrays are sets)."""
+        terms = sorted(self.graph.objects(subject, predicate), key=lambda term: term.n3())
+        values = [term.toPython() if isinstance(term, Literal) else str(term)
+                  for term in terms]
+        if not values:
+            return None
+        return values[0] if len(values) == 1 else values
+
     def _iri(self, subject: URIRef, predicate: URIRef) -> Optional[str]:
         """Return an RDF resource as a fully expanded IRI when possible."""
         value = self.graph.value(subject, predicate)
@@ -193,7 +204,7 @@ class BenchmarkLoader:
         return NumericalParameter(
             id=self._str(uri),
             label=self._label(uri),
-            numerical_value=self._scalar(uri, HAS_NUMERICAL_VALUE),
+            numerical_value=self._parameter_value(uri, HAS_NUMERICAL_VALUE),
             unit=self._scalar(uri, HAS_UNIT),
             unit_iri=self._iri(uri, HAS_UNIT),
             field_mapping=self._field_mapping(uri),
@@ -203,7 +214,7 @@ class BenchmarkLoader:
         return TextParameter(
             id=self._str(uri),
             label=self._label(uri),
-            string_value=self._scalar(uri, HAS_STRING_VALUE),
+            string_value=self._parameter_value(uri, HAS_STRING_VALUE),
             unit=self._scalar(uri, HAS_UNIT),
             unit_iri=self._iri(uri, HAS_UNIT),
             field_mapping=self._field_mapping(uri),
@@ -220,9 +231,9 @@ class BenchmarkLoader:
         )
 
     def build_parameter_entry(self, uri: URIRef) -> ParameterEntry:
-        if self.graph.value(uri, HAS_STRING_VALUE):
+        if self.graph.value(uri, HAS_STRING_VALUE) is not None:
             return self.build_text_parameter(uri)
-        if self.graph.value(uri, HAS_NUMERICAL_VALUE):
+        if self.graph.value(uri, HAS_NUMERICAL_VALUE) is not None:
             return self.build_numerical_parameter(uri)
         if (uri, RDF.type, T_NUMERICAL_VARIABLE) in self.graph:
             return self.build_numerical_variable(uri)
@@ -238,6 +249,30 @@ class BenchmarkLoader:
                 for part in self.graph.objects(uri, HAS_PART)
             ],
         )
+
+    def build_parameter_sets(self, uri: URIRef) -> list[ParameterSet]:
+        """Expand a template into scalar configurations with stable identifiers.
+
+        Scalar-only templates keep their original IDs. Multi-valued templates
+        use ``--1``, ``--2``, ... suffixes, ordered by part IRI and RDF value.
+        """
+        template = self.build_parameter_set(uri)
+        if not any(isinstance(getattr(part, field, None), list)
+                   for part in template.parts
+                   for field in ("string_value", "numerical_value")):
+            return [template]
+
+        choices = []
+        for part in sorted(template.parts, key=lambda part: part.id):
+            field = "string_value" if isinstance(part, TextParameter) else "numerical_value"
+            value = getattr(part, field, None)
+            choices.append([replace(part, **{field: option}) for option in value]
+                           if isinstance(value, list) else [part])
+        return [replace(template, id=f"{template.id}--{index}",
+                        identifier=(f"{template.identifier}--{index}"
+                                    if template.identifier else None),
+                        parts=[replace(part) for part in combination])
+                for index, combination in enumerate(product(*choices), start=1)]
 
     def build_tool(self, uri: URIRef) -> Tool:
         return Tool(id=self._str(uri), label=self._label(uri))
@@ -258,8 +293,9 @@ class BenchmarkLoader:
                 for output_entity in self.graph.objects(uri, HAS_OUTPUT)
             ],
             configurations=[
-                self.build_parameter_set(config)
+                expanded
                 for config in self.graph.objects(uri, USES_CONFIG)
+                for expanded in self.build_parameter_sets(config)
             ],
             employed_tools=[
                 self.build_tool(tool)
@@ -286,7 +322,12 @@ class BenchmarkLoader:
             )
             return errors
 
+        identifiers: set[str] = set()
         for parameter_set in benchmark.parameter_sets:
+            if parameter_set.identifier in identifiers:
+                errors.append(f"duplicate configuration identifier: {parameter_set.identifier!r}")
+            if parameter_set.identifier:
+                identifiers.add(parameter_set.identifier)
             parameter_set_name = parameter_set.label or parameter_set.id
 
             if not parameter_set.identifier:
@@ -388,8 +429,9 @@ class BenchmarkLoader:
                 for metric in self.graph.objects(benchmark_uri, EVALUATES)
             ],
             parameter_sets=[
-                self.build_parameter_set(parameter_set)
+                expanded
                 for parameter_set in self.graph.objects(benchmark_uri, M4I.hasParameterSet)
+                for expanded in self.build_parameter_sets(parameter_set)
             ],
             described_by=(
                 Publication(

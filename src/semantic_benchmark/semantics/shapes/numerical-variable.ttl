@@ -6,7 +6,7 @@
 m4i:NumericalVariableShape a sh:NodeShape ;
     sh:targetClass m4i:NumericalVariable ;
     sh:property [ sh:path rdfs:label ; sh:minCount 1 ; sh:datatype xsd:string ] ;
-    sh:property [ sh:path m4i:hasNumericalValue ; sh:maxCount 1 ; sh:nodeKind sh:Literal ] ;
-    sh:property [ sh:path m4i:hasStringValue ; sh:maxCount 1 ; sh:datatype xsd:string ] ;
+    sh:property [ sh:path m4i:hasNumericalValue ; sh:nodeKind sh:Literal ] ;
+    sh:property [ sh:path m4i:hasStringValue ; sh:datatype xsd:string ] ;
     sh:property [ sh:path m4i:hasUnit ; sh:maxCount 1 ] ;
     sh:property [ sh:path m4i:hasKindOfQuantity ; sh:maxCount 1 ] .
