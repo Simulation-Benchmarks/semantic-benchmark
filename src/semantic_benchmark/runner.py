@@ -77,7 +77,12 @@ def create_parameter_files(
     *,
     strict_units: bool = False,
 ) -> list[Path]:
-    """Create one ``parameters_*.json`` file per benchmark configuration."""
+    """Create one ``parameters_*.json`` file per benchmark configuration.
+
+    Only units resolved through ``unit_symbols`` add a suffix to parameter keys.
+    Unmapped or missing units leave the label unchanged. ``strict_units`` is
+    retained for compatibility and no longer rejects unmapped units.
+    """
     for stale_file in output_dir.glob("parameters_*.json"):
         stale_file.unlink()
 
@@ -87,14 +92,6 @@ def create_parameter_files(
             continue
         payload = {"configuration": configuration.identifier}
         for parameter in configuration.parts:
-            if (
-                parameter.unit
-                and strict_units
-                and not resolve_unit_symbol(parameter.unit, unit_symbols)
-            ):
-                raise ValueError(
-                    f"Unrecognized unit {parameter.unit!r}; add it to unit_symbols."
-                )
             payload[parameter_json_key(parameter, unit_symbols)] = parameter_json_value(
                 parameter
             )
@@ -119,6 +116,8 @@ def prepare_benchmark(
     Optionally extracts a workflow archive, stages benchmark resources, creates
     shared workflow directories, and always generates the configuration
     parameter files.
+    Unit suffixes use only ``unit_symbols``; ``strict_units`` is retained as a
+    compatibility argument and does not require mappings for every unit.
     """
     if archive is not None:
         extract_archive(archive, benchmark_dir)
