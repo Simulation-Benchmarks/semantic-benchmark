@@ -440,6 +440,31 @@ def test_array_parameters_expand_and_write_scalar_files(tmp_path):
     assert loader.load() == benchmark
 
 
+@pytest.mark.parametrize('strict_units', [False, True])
+@pytest.mark.parametrize('unit_symbols, expected_key', [
+    ({}, 'degree'),
+    ({'M': 'm'}, 'degree'),
+    ({'UNITLESS': ''}, 'degree'),
+    ({'UNITLESS': '1'}, 'degree[1]'),
+])
+def test_unmapped_unitless_parameters_are_allowed(
+    tmp_path, strict_units, unit_symbols, expected_key,
+):
+    from semantic_benchmark import runner
+
+    document = _sweep_document()
+    _node(document, 'local:degree')['has unit'] = {'@id': 'unit:UNITLESS'}
+    benchmark = _validate(tmp_path, document).load()
+    paths = runner.create_parameter_files(
+        benchmark, tmp_path, unit_symbols, strict_units=strict_units,
+    )
+    assert len(paths) == 4
+    for path in paths:
+        payload = json.loads(path.read_text())
+        assert payload[expected_key] == 1
+        assert ('radius[m]' if 'M' in unit_symbols else 'radius') in payload
+
+
 def test_sweep_order_is_independent_of_array_and_part_order(tmp_path):
     document = _sweep_document()
     expected = _validate(tmp_path, document).load()
