@@ -37,12 +37,10 @@ def build_published_runs_query() -> str:
     PREFIX schemas: <https://schema.org/>
     PREFIX schema: <http://schema.org/>
     PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
-    PREFIX prov: <http://www.w3.org/ns/prov#>
     
-    SELECT DISTINCT ?run_id ?benchmark_url ?branch_url ?benchmark_repo ?software_url ?datePublished ?version
+    SELECT DISTINCT ?run_id ?benchmark_url ?branch_url ?benchmark_repo ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_repo .
-        ?run_id prov:used ?software_url .
         ?run_id schema:datePublished ?datePublished .
         ?run_id schemas:codeRepository ?branch_url .
         ?benchmark_url schemas:codeRepository ?benchmark_repo .
@@ -52,14 +50,28 @@ def build_published_runs_query() -> str:
 
 
 def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
-    """Build a query resolving published run IRIs to their named graphs."""
+    """Resolve run graphs and read their software metadata."""
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
     PREFIX schema: <http://schema.org/>
-    SELECT ?run_id ?graph
+    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    PREFIX prov: <http://www.w3.org/ns/prov#>
+    SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version
     WHERE {{
       VALUES ?run_id {{ {values} }}
-      GRAPH ?graph {{ ?run_id a schema:Dataset . }}
+      GRAPH ?graph {{
+        ?run_id a schema:Dataset .
+        OPTIONAL {{
+          ?graph_software_url a schema:SoftwareApplication .
+          OPTIONAL {{ ?graph_software_url foaf:name ?software_name . }}
+          OPTIONAL {{ ?graph_software_url schema:version ?software_version . }}
+        }}
+      }}
+      OPTIONAL {{ ?run_id prov:used ?annotated_software_url . }}
+      BIND(COALESCE(
+        IF(BOUND(?software_version), ?graph_software_url, ?annotated_software_url),
+        ?graph_software_url
+      ) AS ?software_url)
     }}
     """
 
