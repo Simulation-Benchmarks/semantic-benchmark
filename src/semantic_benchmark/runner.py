@@ -194,6 +194,8 @@ def create_aggregate_rocrate(
     crate_name: str,
     crate_description: str,
     validation_dir: Path | None = None,
+    software_url: str | None = None,
+    software_version: str | None = None,
 ) -> None:
     """Create the aggregate RO-Crate shared by benchmark runners."""
     # RO-Crate support is optional. Import it only when this feature is used so
@@ -208,6 +210,8 @@ def create_aggregate_rocrate(
         benchmark_object=benchmark,
         rocrate_path=str(rocrate_path),
         software_name=software_name,
+        software_url=software_url,
+        software_version=software_version,
         crate_license=crate_license,
         crate_name=crate_name,
         crate_description=crate_description,

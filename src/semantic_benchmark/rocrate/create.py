@@ -7,11 +7,13 @@ import json
 import logging
 import re
 import shutil
+import tempfile
 import uuid
 import zipfile
 from pathlib import Path
 from typing import Any, Literal, TypedDict, get_args
 
+from rocrate.model.softwareapplication import SoftwareApplication
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
 from semantic_benchmark.rocrate.validation import validate_rocrate
@@ -135,18 +137,24 @@ def _collect_subcrates(subfolders: list[Path]) -> list[Path]:
     return subcrates
 
 
-def _unzip_subcrates_at_root(subcrates: list[Path]) -> None:
-    """Extract each subcrate zip into its containing run folder.
+def _unzip_subcrates_for_reading(
+    subcrates: list[Path], input_path: Path, extraction_path: Path
+) -> None:
+    """Extract run crates into a temporary workspace for metric and workflow reads.
 
     Args:
         subcrates: Zip files to extract.
+        input_path: Root directory containing the run folders.
+        extraction_path: Temporary root directory for extracted files.
 
     Returns:
-        None. The function writes extracted files to each zip file's parent folder.
+        None. Extracted files remain outside the original run folders.
     """
     for subcrate in subcrates:
+        destination = extraction_path / subcrate.parent.relative_to(input_path)
+        destination.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(subcrate, "r") as archive:
-            archive.extractall(subcrate.parent)
+            archive.extractall(destination)
 
 
 def _add_subcrates_to_main(
@@ -714,19 +722,28 @@ def _add_profile_creative_works(crate: ROCrate) -> None:
         crate.add_jsonld(creative_work)
 
 
-def _add_software_node(crate: ROCrate, software_id: str, software_name: str) -> None:
+def _add_software_node(
+    crate: ROCrate,
+    software_id: str,
+    software_name: str,
+    software_version: str | None = None,
+) -> None:
     """Add the software application node used as the action instrument.
 
     Args:
         crate: Aggregate RO-Crate being built.
         software_id: JSON-LD id assigned to the software node.
         software_name: Human-readable software name.
+        software_version: Version of the software, if known.
 
     Returns:
         None. The function mutates ``crate``.
     """
-    crate.add_jsonld(
-        {"@id": software_id, "@type": "SoftwareApplication", "name": software_name}
+    properties = {"name": software_name}
+    if software_version:
+        properties["version"] = software_version
+    crate.add(
+        SoftwareApplication(crate, identifier=software_id, properties=properties)
     )
 
 
@@ -771,6 +788,8 @@ def create_main_ro(
     lang: WorkflowLanguage = "snakemake",
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
+    software_url: str | None = None,
+    software_version: str | None = None,
 ) -> None:
     """Create and write an aggregate RO-Crate for a benchmark result directory.
 
@@ -790,6 +809,9 @@ def create_main_ro(
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
             Defaults to ``unpacked_rocrate`` next to ``rocrate_path``.
+        software_url: Stable software identifier (for example, a zbMATH URL).
+            If omitted, a local identifier is generated.
+        software_version: Software version to record, if known.
 
     Returns:
         None. The function writes the aggregate RO-Crate zip to
@@ -817,55 +839,64 @@ def create_main_ro(
     )
     subfolders = _iter_subfolders(input_path)
     subcrates = _collect_subcrates(subfolders)
-    _unzip_subcrates_at_root(subcrates)
 
     if not subcrates:
         raise ValueError(
             "No .zip files found inside subfolders of the specified directory"
         )
 
-    _add_subcrates_to_main(crate, subcrates, input_path)
+    with tempfile.TemporaryDirectory(prefix="benchmark-subcrates-") as extraction_dir:
+        extraction_path = Path(extraction_dir)
+        _unzip_subcrates_for_reading(subcrates, input_path, extraction_path)
+        extracted_subfolders = [
+            extraction_path / subfolder.relative_to(input_path)
+            for subfolder in subfolders
+        ]
 
-    object_ids_by_run = _create_action_object_ids(input_path, subfolders)
-    configuration_entries = _add_configuration_nodes(crate, benchmark_object)
-    run_results = _add_evaluates_nodes(crate, benchmark_object, subfolders)
-    run_results_by_name = _run_results_by_name(run_results)
+        _add_subcrates_to_main(crate, subcrates, input_path)
 
-    workflow_id = get_workflow_id(
-        subcrates[0],
-        fallback=Path(workflow_path).name if workflow_path is not None else "Snakefile",
-    )
-    workflow_file = (
-        Path(workflow_path)
-        if workflow_path is not None
-        else subcrates[0].parent / workflow_id
-    )
-    if not workflow_file.is_file():
-        raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
+        object_ids_by_run = _create_action_object_ids(input_path, subfolders)
+        configuration_entries = _add_configuration_nodes(crate, benchmark_object)
+        run_results = _add_evaluates_nodes(
+            crate, benchmark_object, extracted_subfolders
+        )
+        run_results_by_name = _run_results_by_name(run_results)
 
-    software_id = str(uuid.uuid4())
+        workflow_id = get_workflow_id(
+            subcrates[0],
+            fallback=Path(workflow_path).name if workflow_path is not None else "Snakefile",
+        )
+        workflow_file = (
+            Path(workflow_path)
+            if workflow_path is not None
+            else extraction_path / subcrates[0].parent.relative_to(input_path) / workflow_id
+        )
+        if not workflow_file.is_file():
+            raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
 
-    _add_run_actions(
-        crate=crate,
-        subfolders=subfolders,
-        object_ids_by_run=object_ids_by_run,
-        processing_steps=benchmark_object.processing_steps,
-        configuration_entries=configuration_entries,
-        run_results_by_name=run_results_by_name,
-        software_id=software_id,
-    )
-    _configure_crate_metadata(
-        crate,
-        workflow_id,
-        crate_license=crate_license,
-        crate_name=crate_name,
-        crate_description=crate_description,
-    )
-    _add_software_node(crate, software_id, software_name)
-    _add_profile_creative_works(crate)
-    _add_workflow_node(crate, workflow_file, software_id, workflow_id, lang)
+        software_id = software_url or _new_jsonld_id()
 
-    crate.write_zip(rocrate_path)
+        _add_run_actions(
+            crate=crate,
+            subfolders=subfolders,
+            object_ids_by_run=object_ids_by_run,
+            processing_steps=benchmark_object.processing_steps,
+            configuration_entries=configuration_entries,
+            run_results_by_name=run_results_by_name,
+            software_id=software_id,
+        )
+        _configure_crate_metadata(
+            crate,
+            workflow_id,
+            crate_license=crate_license,
+            crate_name=crate_name,
+            crate_description=crate_description,
+        )
+        _add_software_node(crate, software_id, software_name, software_version)
+        _add_profile_creative_works(crate)
+        _add_workflow_node(crate, workflow_file, software_id, workflow_id, lang)
+
+        crate.write_zip(rocrate_path)
 
     if validation_profile:
         validation_path = Path(validation_dir) if validation_dir else (
@@ -875,13 +906,16 @@ def create_main_ro(
             shutil.rmtree(validation_path)
         validation_path.mkdir(parents=True, exist_ok=True)
 
-        with zipfile.ZipFile(rocrate_path, "r") as zip_ref:
-            zip_ref.extractall(validation_path)
+        try:
+            with zipfile.ZipFile(rocrate_path, "r") as zip_ref:
+                zip_ref.extractall(validation_path)
 
-        validate_rocrate(
-            rocrate_path=str(validation_path),
-            profile=validation_profile,
-        )
+            validate_rocrate(
+                rocrate_path=str(validation_path),
+                profile=validation_profile,
+            )
+        finally:
+            shutil.rmtree(validation_path)
 
 
 def parse_args() -> argparse.Namespace:
@@ -913,6 +947,14 @@ def parse_args() -> argparse.Namespace:
         "--software-name",
         required=True,
         help="Name of the software application recorded in the generated RO-Crate",
+    )
+    parser.add_argument(
+        "--software-url",
+        help="Stable URL identifying the software application",
+    )
+    parser.add_argument(
+        "--software-version",
+        help="Version of the software application",
     )
     parser.add_argument(
         "--crate-license",
@@ -973,6 +1015,8 @@ def main() -> None:
         benchmark_object,
         rocrate_path=args.rocrate_path,
         software_name=args.software_name,
+        software_url=args.software_url,
+        software_version=args.software_version,
         crate_license=args.crate_license,
         crate_name=args.crate_name,
         crate_description=args.crate_description,
