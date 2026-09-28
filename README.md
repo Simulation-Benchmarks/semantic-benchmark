@@ -56,8 +56,9 @@ The package also exposes the
 
 `upload-semantic-benchmark` calls `upload_provenance_rocrate(...)` directly.
 It accepts `--provenance_folderpath` (the RO-Crate ZIP), `--benchmark-name`,
-`--username`, `--password`, and optional `--code-repository-url`,
-`--used-software-url`, and `--use-production-rohub` arguments.
+`--username`, `--password`, `--software-version` (used to match an existing run
+for replacement), and optional `--code-repository-url`,
+`--software-url`, and `--use-production-rohub` arguments.
 
 `semantic_benchmark.rocrate.create_main_ro(...)` can validate the generated
 aggregate crate by passing `validation_profile`. The package writes the RO-Crate

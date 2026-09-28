@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import time
 from typing import Iterable
+
 import pandas as pd
 import rohub
 
@@ -337,9 +338,10 @@ def build_benchmark_ro_uuids_query(benchmark_name: str) -> str:
 def build_annotated_ro_uuids_query(
     benchmark_name: str,
     code_repository_url: str | None = None,
-    used_software_url: str | None = None,
+    software_url: str | None = None,
+    software_version: str | None = None,
 ) -> str:
-    """Build a query for research objects matching upload annotations."""
+    """Build a query matching upload annotations and the crate's software version."""
     annotation_pairs = [
         (ANNOTATION_PREDICATE, benchmark_annotation_object(benchmark_name)),
     ]
@@ -347,18 +349,29 @@ def build_annotated_ro_uuids_query(
     if code_repository_url:
         annotation_pairs.append((CODE_REPOSITORY_PREDICATE, code_repository_url))
 
-    if used_software_url:
-        annotation_pairs.append((SOFTWARE_USED_PREDICATE, used_software_url))
+    if software_url:
+        annotation_pairs.append((SOFTWARE_USED_PREDICATE, software_url))
 
     annotation_patterns = "\n".join(
         f"      ?subject <{predicate}> <{value}> ."
         for predicate, value in annotation_pairs
     )
 
+    version_pattern = ""
+    if software_version:
+        software = f"<{software_url}>" if software_url else "?software"
+        version_pattern = f"""
+      GRAPH ?graph {{
+        ?subject a <http://schema.org/Dataset> .
+        {software} (<http://schema.org/version>|<https://schema.org/version>) ?version .
+        FILTER(STR(?version) = "{_sparql_string_literal(software_version)}")
+      }}"""
+
     return f"""
     SELECT ?subject
-    WHERE {{ {annotation_patterns} }}
+    WHERE {{ {annotation_patterns}{version_pattern} }}
     """
+
 
 def query_sparql(query: str):
     """Run a SPARQL query against the configured RoHub endpoint."""
@@ -456,14 +469,16 @@ def extract_uuids_from_subjects(subjects: Iterable[str]) -> list[str]:
 def find_annotated_ro_uuids(
     benchmark_name: str,
     code_repository_url: str | None = None,
-    used_software_url: str | None = None,
+    software_url: str | None = None,
+    software_version: str | None = None,
 ) -> list[str]:
     """Find RoHub research object UUIDs matching upload annotations."""
     result = query_sparql(
         build_annotated_ro_uuids_query(
             benchmark_name=benchmark_name,
             code_repository_url=code_repository_url,
-            used_software_url=used_software_url,
+            software_url=software_url,
+            software_version=software_version,
         )
     )
 
@@ -563,13 +578,15 @@ def load_benchmark_metric_data(
 def delete_research_objects_by_annotations(
     benchmark_name: str,
     code_repository_url: str | None = None,
-    used_software_url: str | None = None,
+    software_url: str | None = None,
+    software_version: str | None = None,
 ) -> None:
     """Delete existing research objects matching upload annotations."""
     uuids = find_annotated_ro_uuids(
         benchmark_name=benchmark_name,
         code_repository_url=code_repository_url,
-        used_software_url=used_software_url,
+        software_url=software_url,
+        software_version=software_version,
     )
 
     if not uuids:
@@ -625,7 +642,7 @@ def add_benchmark_annotation(
     uuid: str,
     benchmark_name: str,
     code_repository_url: str | None = None,
-    used_software_url: str | None = None,
+    software_url: str | None = None,
 ) -> None:
     """Add benchmark semantic annotations to a RoHub research object."""
     research_object = rohub.ros_load(uuid)
@@ -644,11 +661,11 @@ def add_benchmark_annotation(
             }
         )
 
-    if used_software_url:
+    if software_url:
         annotation_json.append(
             {
                 "property": SOFTWARE_USED_PREDICATE,
-                "value": used_software_url,
+                "value": software_url,
             }
         )
 
@@ -663,11 +680,15 @@ def upload_provenance_rocrate(
     benchmark_name: str,
     username: str,
     password: str,
+    software_version: str,
     code_repository_url: str | None = None,
-    used_software_url: str | None = None,
+    software_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> str:
     """Upload a provenance RO-Crate to RoHub and add semantic annotations."""
+    software_version = software_version.strip()
+    if not software_version:
+        raise ValueError("A software version is required to replace an existing run.")
     login_to_rohub(
         username=username,
         password=password,
@@ -677,7 +698,8 @@ def upload_provenance_rocrate(
     delete_research_objects_by_annotations(
         benchmark_name=benchmark_name,
         code_repository_url=code_repository_url,
-        used_software_url=used_software_url,
+        software_url=software_url,
+        software_version=software_version,
     )
     job_id, uuid = upload_research_object(provenance_folderpath)
 
@@ -686,7 +708,7 @@ def upload_provenance_rocrate(
             uuid,
             benchmark_name,
             code_repository_url=code_repository_url,
-            used_software_url=used_software_url,
+            software_url=software_url,
         )
 
     return uuid
