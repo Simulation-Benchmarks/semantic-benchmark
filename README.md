@@ -63,6 +63,8 @@ for replacement), and optional `--code-repository-url`,
 `semantic_benchmark.rocrate.create_main_ro(...)` can validate the generated
 aggregate crate by passing `validation_profile`. The package writes the RO-Crate
 zip, unpacks it to a validation directory, and runs `validate_rocrate(...)`.
+Aggregate creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
+from completed runs. The CLI accepts one `--subcrate-path` per run.
 
 Repository-specific projects can override the packaged RoHub defaults with:
 

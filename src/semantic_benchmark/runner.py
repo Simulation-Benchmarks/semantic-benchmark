@@ -159,6 +159,10 @@ def prepare_configuration(
     return configuration, output_dir
 
 
+def _reporter_archive_stem(tool_name: str, configuration: str) -> str:
+    return f"{tool_name}-{configuration}"
+
+
 def build_provenance_reporter_args(
     configuration: str,
     *,
@@ -172,7 +176,7 @@ def build_provenance_reporter_args(
         "--reporter",
         "metadata4ing",
         "--report-metadata4ing-filename",
-        f"{tool_name}-{configuration}",
+        _reporter_archive_stem(tool_name, configuration),
         "--report-metadata4ing-name",
         report_name,
         "--report-metadata4ing-description",
@@ -184,6 +188,11 @@ def build_provenance_reporter_args(
     ]
 
 
+def reporter_rocrate_path(output_dir: Path, configuration: str, tool_name: str) -> Path:
+    """Return the ZIP path set by ``--report-metadata4ing-filename``."""
+    return output_dir / f"{_reporter_archive_stem(tool_name, configuration)}.zip"
+
+
 def create_aggregate_rocrate(
     results_dir: Path,
     benchmark: SemanticBenchmark,
@@ -193,6 +202,7 @@ def create_aggregate_rocrate(
     crate_license: str,
     crate_name: str,
     crate_description: str,
+    subcrate_paths: list[str | Path],
     validation_dir: Path | None = None,
     software_url: str | None = None,
     software_version: str | None = None,
@@ -215,6 +225,7 @@ def create_aggregate_rocrate(
         crate_license=crate_license,
         crate_name=crate_name,
         crate_description=crate_description,
+        subcrate_paths=subcrate_paths,
         validation_profile="provenance-run-crate-0.5",
         **options,
     )

@@ -86,54 +86,26 @@ def _new_jsonld_id() -> str:
     return f"#{uuid.uuid4()}"
 
 
-def _iter_subfolders(input_path: Path) -> list[Path]:
-    """List direct run folders in a simulation result directory.
-
-    Args:
-        input_path: Directory containing one child folder per simulation run.
-
-    Returns:
-        Sorted direct child paths that are directories.
-    """
-    return [entry for entry in sorted(input_path.iterdir()) if entry.is_dir()]
+def _is_reporter_subcrate(path: Path) -> bool:
+    """Identify a metadata4ing RO-Crate without extracting its contents."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+    except (OSError, zipfile.BadZipFile):
+        return False
+    return "ro-crate-metadata.json" in names
 
 
-def _subcrate_pattern(subfolder: Path) -> str:
-    """Build the metadata4ing zip filename pattern for a run folder.
-
-    Args:
-        subfolder: Run folder whose name is encoded in the subcrate filename.
-
-    Returns:
-        Glob pattern matching zip files named ``*-<run-folder-name>.zip``.
-    """
-    return f"*-{subfolder.name}.zip"
-
-
-def _first_subcrate(subfolder: Path) -> Path | None:
-    """Find the first metadata4ing subcrate zip in a run folder.
-
-    Args:
-        subfolder: Run folder to search.
-
-    Returns:
-        The first matching zip path, or ``None`` when no subcrate exists.
-    """
-    return next(iter(sorted(subfolder.glob(_subcrate_pattern(subfolder)))), None)
-
-
-def _collect_subcrates(subfolders: list[Path]) -> list[Path]:
-    """Collect metadata4ing subcrate zip files from run folders.
-
-    Args:
-        subfolders: Run folders to search.
-
-    Returns:
-        Sorted matching subcrate zip paths from all run folders.
-    """
-    subcrates: list[Path] = []
-    for subfolder in subfolders:
-        subcrates.extend(sorted(subfolder.glob(_subcrate_pattern(subfolder))))
+def _validate_subcrate_paths(input_path: Path, paths: list[str | Path]) -> list[Path]:
+    """Resolve and validate explicitly supplied reporter RO-Crate ZIPs."""
+    subcrates = sorted(Path(path).resolve() for path in paths)
+    for subcrate in subcrates:
+        if subcrate.parent.parent != input_path:
+            raise ValueError(f"Reporter RO-Crate must be in a result subfolder: {subcrate}")
+        if not subcrate.is_file():
+            raise FileNotFoundError(subcrate)
+        if not _is_reporter_subcrate(subcrate):
+            raise ValueError(f"Not a reporter RO-Crate ZIP: {subcrate}")
     return subcrates
 
 
@@ -178,25 +150,20 @@ def _add_subcrates_to_main(
         )
 
 
-def _create_action_object_ids(
-    input_path: Path, subfolders: list[Path]
-) -> dict[str, str]:
+def _create_action_object_ids(input_path: Path, subcrates: list[Path]) -> dict[str, str]:
     """Map run folder names to relative subcrate object ids.
 
     Args:
         input_path: Root simulation result directory.
-        subfolders: Run folders to inspect.
+        subcrates: Reporter RO-Crate ZIPs for completed runs.
 
     Returns:
-        Mapping from run folder name to the subcrate zip path relative to
-        ``input_path``. Folders without a matching subcrate are omitted.
+        Mapping from run folder name to the subcrate ZIP path relative to
+        ``input_path``.
     """
     object_ids: dict[str, str] = {}
-    for subfolder in subfolders:
-        subcrate = _first_subcrate(subfolder)
-        if subcrate is None:
-            continue
-        object_ids[subfolder.name] = str(subcrate.relative_to(input_path))
+    for subcrate in subcrates:
+        object_ids.setdefault(subcrate.parent.name, str(subcrate.relative_to(input_path)))
     return object_ids
 
 
@@ -784,6 +751,7 @@ def create_main_ro(
     crate_license: str,
     crate_name: str,
     crate_description: str,
+    subcrate_paths: list[str | Path],
     workflow_path: str | Path | None = None,
     lang: WorkflowLanguage = "snakemake",
     validation_profile: str | None = None,
@@ -812,6 +780,7 @@ def create_main_ro(
         software_url: Stable software identifier (for example, a zbMATH URL).
             If omitted, a local identifier is generated.
         software_version: Software version to record, if known.
+        subcrate_paths: Exact reporter RO-Crate ZIPs to include.
 
     Returns:
         None. The function writes the aggregate RO-Crate zip to
@@ -837,12 +806,13 @@ def create_main_ro(
         "Creating aggregate RO-Crate from simulation results in %s...",
         input_path,
     )
-    subfolders = _iter_subfolders(input_path)
-    subcrates = _collect_subcrates(subfolders)
+    input_path = input_path.resolve()
+    subcrates = _validate_subcrate_paths(input_path, subcrate_paths)
+    subfolders = sorted({subcrate.parent for subcrate in subcrates})
 
     if not subcrates:
         raise ValueError(
-            "No .zip files found inside subfolders of the specified directory"
+            "No reporter RO-Crate ZIP files found inside result subfolders"
         )
 
     with tempfile.TemporaryDirectory(prefix="benchmark-subcrates-") as extraction_dir:
@@ -855,7 +825,7 @@ def create_main_ro(
 
         _add_subcrates_to_main(crate, subcrates, input_path)
 
-        object_ids_by_run = _create_action_object_ids(input_path, subfolders)
+        object_ids_by_run = _create_action_object_ids(input_path, subcrates)
         configuration_entries = _add_configuration_nodes(crate, benchmark_object)
         run_results = _add_evaluates_nodes(
             crate, benchmark_object, extracted_subfolders
@@ -918,7 +888,7 @@ def create_main_ro(
             shutil.rmtree(validation_path)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command-line arguments for aggregate RO-Crate creation.
 
     Returns:
@@ -936,7 +906,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--simulation-result-path",
         required=True,
-        help="Path containing simulation result subfolders with RoCrate zip files",
+        help="Path containing simulation result subfolders",
+    )
+    parser.add_argument(
+        "--subcrate-path",
+        dest="subcrate_paths",
+        action="append",
+        required=True,
+        help="Reporter RO-Crate ZIP path; repeat for each run",
     )
     parser.add_argument(
         "--rocrate-path",
@@ -997,7 +974,7 @@ def parse_args() -> argparse.Namespace:
         help="Optional directory for unpacked validation content",
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
@@ -1020,6 +997,7 @@ def main() -> None:
         crate_license=args.crate_license,
         crate_name=args.crate_name,
         crate_description=args.crate_description,
+        subcrate_paths=args.subcrate_paths,
         workflow_path=args.workflow_path,
         lang=args.workflow_lang,
         validation_profile=args.validation_profile,
