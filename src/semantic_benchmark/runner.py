@@ -4,11 +4,9 @@ import json
 import logging
 import re
 import shutil
-import tempfile
 import zipfile
-from contextlib import contextmanager
 from pathlib import Path
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable
 from typing import Any, Mapping
 
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
@@ -184,33 +182,6 @@ def build_provenance_reporter_args(
         "--report-metadata4ing-profile",
         "provenance-run-crate-0.5",
     ]
-
-
-@contextmanager
-def stage_run_rocrates(results_dir: Path) -> Iterator[Path]:
-    """Move per-run RO-Crates to temporary storage for aggregate creation.
-
-    The run folders retain simulation results. Crates are restored if the
-    caller fails, including if staging itself raises an exception.
-    """
-    with tempfile.TemporaryDirectory(prefix="benchmark-run-rocrates-") as temp_dir:
-        staged_root = Path(temp_dir)
-        moved: list[tuple[Path, Path]] = []
-        try:
-            for run_dir in sorted(results_dir.iterdir()):
-                if not run_dir.is_dir():
-                    continue
-                for subcrate in run_dir.glob(f"*-{run_dir.name}.zip"):
-                    target_dir = staged_root / run_dir.name
-                    target_dir.mkdir(exist_ok=True)
-                    staged_subcrate = target_dir / subcrate.name
-                    shutil.move(str(subcrate), str(staged_subcrate))
-                    moved.append((staged_subcrate, subcrate))
-            yield staged_root
-        except Exception:
-            for staged_subcrate, original_subcrate in moved:
-                shutil.move(str(staged_subcrate), str(original_subcrate))
-            raise
 
 
 def create_aggregate_rocrate(
