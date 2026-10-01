@@ -38,12 +38,14 @@ def build_published_runs_query() -> str:
     PREFIX schemas: <https://schema.org/>
     PREFIX schema: <http://schema.org/>
     PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
-    
-    SELECT DISTINCT ?run_id ?benchmark_url ?branch_url ?benchmark_repo ?datePublished ?version
+    PREFIX dcterms: <http://purl.org/dc/terms/>
+
+    SELECT DISTINCT ?run_id ?title ?benchmark_url ?branch_url ?benchmark_repo ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_repo .
         ?run_id schema:datePublished ?datePublished .
         ?run_id schemas:codeRepository ?branch_url .
+        OPTIONAL { ?run_id dcterms:title ?title . }
         ?benchmark_url schemas:codeRepository ?benchmark_repo .
         ?benchmark_url schemas:version ?version .
     }
