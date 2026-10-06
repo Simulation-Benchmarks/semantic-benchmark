@@ -35,22 +35,10 @@ def parse_args(argv=None):
         help="Password for RoHub",
     )
     parser.add_argument(
-        "--software-version",
-        type=str,
-        required=True,
-        help="Software version used to identify the run to replace",
-    )
-    parser.add_argument(
         "--code-repository-url",
         type=str,
         default=None,
         help="Full GitHub branch URL to annotate as schema.org/codeRepository",
-    )
-    parser.add_argument(
-        "--software-url",
-        type=str,
-        default=None,
-        help="Software identifier URL to annotate as prov:used",
     )
     parser.add_argument(
         "--use-production-rohub",
@@ -69,9 +57,7 @@ def main():
         benchmark_name=args.benchmark_name,
         username=args.username,
         password=args.password,
-        software_version=args.software_version,
         code_repository_url=args.code_repository_url,
-        software_url=args.software_url,
         use_production_rohub=args.use_production_rohub,
     )
 
