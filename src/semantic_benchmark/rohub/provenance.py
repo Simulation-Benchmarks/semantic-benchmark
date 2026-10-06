@@ -12,6 +12,8 @@ from typing import Iterable
 
 import pandas as pd
 import rohub
+from rocrate.model.softwareapplication import SoftwareApplication
+from rocrate.rocrate import ROCrate
 
 
 CONFIG_DIR = Path(__file__).resolve().parent
@@ -30,6 +32,27 @@ BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = "https://schema.org/codeRepository"
 SOFTWARE_USED_PREDICATE = "http://www.w3.org/ns/prov#used"
 FOAF_NAME = "<http://xmlns.com/foaf/0.1/name>"
+
+
+def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
+    """Read the software identifier and version from an aggregate RO-Crate ZIP."""
+    crate = ROCrate(provenance_folderpath)
+    software = [
+        entity
+        for entity in crate.get_entities()
+        if isinstance(entity, SoftwareApplication)
+        and isinstance(entity.version, str)
+        and entity.version.strip()
+    ]
+    if len(software) != 1:
+        raise ValueError(
+            "Expected exactly one SoftwareApplication with a version in the provenance RO-Crate"
+        )
+    software_url = software[0].id.strip()
+    software_version = software[0].version.strip()
+    if not software_url.startswith(("http://", "https://")) or not software_version:
+        raise ValueError("The RO-Crate software must have a URL and non-empty version")
+    return software_url, software_version
 
 
 def build_published_runs_query() -> str:
@@ -682,15 +705,11 @@ def upload_provenance_rocrate(
     benchmark_name: str,
     username: str,
     password: str,
-    software_version: str,
     code_repository_url: str | None = None,
-    software_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> str:
     """Upload a provenance RO-Crate to RoHub and add semantic annotations."""
-    software_version = software_version.strip()
-    if not software_version:
-        raise ValueError("A software version is required to replace an existing run.")
+    software_url, software_version = extract_software_metadata(provenance_folderpath)
     login_to_rohub(
         username=username,
         password=password,
