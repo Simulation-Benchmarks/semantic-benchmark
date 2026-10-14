@@ -10,7 +10,6 @@ def test_published_runs_follow_benchmark_ro_and_version() -> None:
     run = URIRef("https://w3id.org/ro-id/run-uuid")
     benchmark = URIRef("https://w3id.org/ro-id/benchmark-uuid")
     research_problem = URIRef("https://portal.mardi4nfdi.de/entity/Q6775295")
-    repository = URIRef("https://github.com/Simulation-Benchmarks/example")
     graph.add((run, URIRef("http://w3id.org/nfdi4ing/metadata4ing#investigates"), benchmark))
     graph.add((run, URIRef("http://schema.org/datePublished"), Literal("2026-10-13")))
     graph.add(
@@ -30,7 +29,7 @@ def test_published_runs_follow_benchmark_ro_and_version() -> None:
     assert str(rows[0].benchmark_url) == str(benchmark)
     assert str(rows[0].benchmark_title) == "example (version 1.1.0)"
     assert str(rows[0].research_problem_uri) == str(research_problem)
-    assert str(rows[0].benchmark_repo) == str(repository)
+    assert str(rows[0].branch_url) == "https://github.com/Simulation-Benchmarks/example/tree/main"
     assert str(rows[0].version) == "1.1.0"
 
     graph.remove((benchmark, URIRef("https://schema.org/version"), None))

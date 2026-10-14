@@ -30,7 +30,6 @@ ROHUB_CONFIG = _load_json_config("rohub_config.json")
 ANNOTATION_PREDICATE = "http://w3id.org/nfdi4ing/metadata4ing#investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = "https://schema.org/codeRepository"
-SOFTWARE_USED_PREDICATE = "http://www.w3.org/ns/prov#used"
 FOAF_NAME = "<http://xmlns.com/foaf/0.1/name>"
 
 
@@ -63,7 +62,7 @@ def build_published_runs_query() -> str:
     PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
     PREFIX dcterms: <http://purl.org/dc/terms/>
 
-    SELECT DISTINCT ?run_id ?title ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?benchmark_repo ?datePublished ?version
+    SELECT DISTINCT ?run_id ?title ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_url .
         ?run_id schema_http:datePublished ?datePublished .
@@ -72,9 +71,6 @@ def build_published_runs_query() -> str:
         ?benchmark_url dcterms:title ?benchmark_title .
         ?benchmark_url m4i:investigates ?research_problem_uri .
         ?benchmark_url schema:version ?version .
-        BIND(IRI(IF(CONTAINS(STR(?branch_url), "/tree/"),
-                    STRBEFORE(STR(?branch_url), "/tree/"),
-                    STR(?branch_url))) AS ?benchmark_repo)
     }
     """
 
@@ -85,23 +81,17 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
     return f"""
     PREFIX schema: <http://schema.org/>
     PREFIX foaf: <http://xmlns.com/foaf/0.1/>
-    PREFIX prov: <http://www.w3.org/ns/prov#>
     SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version
     WHERE {{
       VALUES ?run_id {{ {values} }}
       GRAPH ?graph {{
         ?run_id a schema:Dataset .
         OPTIONAL {{
-          ?graph_software_url a schema:SoftwareApplication .
-          OPTIONAL {{ ?graph_software_url foaf:name ?software_name . }}
-          OPTIONAL {{ ?graph_software_url schema:version ?software_version . }}
+          ?software_url a schema:SoftwareApplication .
+          OPTIONAL {{ ?software_url foaf:name ?software_name . }}
+          OPTIONAL {{ ?software_url schema:version ?software_version . }}
         }}
       }}
-      OPTIONAL {{ ?run_id prov:used ?annotated_software_url . }}
-      BIND(COALESCE(
-        IF(BOUND(?software_version), ?graph_software_url, ?annotated_software_url),
-        ?graph_software_url
-      ) AS ?software_url)
     }}
     """
 
@@ -395,27 +385,29 @@ def build_annotated_ro_uuids_query(
     if code_repository_url:
         annotation_pairs.append((CODE_REPOSITORY_PREDICATE, code_repository_url))
 
-    if software_url:
-        annotation_pairs.append((SOFTWARE_USED_PREDICATE, software_url))
-
     annotation_patterns = benchmark_pattern + "\n" + "\n".join(
         f"      ?subject <{predicate}> <{value}> ."
         for predicate, value in annotation_pairs
     )
 
-    version_pattern = ""
-    if software_version:
+    software_pattern = ""
+    if software_url or software_version:
         software = f"<{software_url}>" if software_url else "?software"
-        version_pattern = f"""
+        software_version_pattern = ""
+        if software_version:
+            software_version_pattern = f"""
+        {software} (<http://schema.org/version>|<https://schema.org/version>) ?version .
+        FILTER(STR(?version) = "{_sparql_string_literal(software_version)}")"""
+        software_pattern = f"""
       GRAPH ?graph {{
         ?subject a <http://schema.org/Dataset> .
-        {software} (<http://schema.org/version>|<https://schema.org/version>) ?version .
-        FILTER(STR(?version) = "{_sparql_string_literal(software_version)}")
+        {software} a <http://schema.org/SoftwareApplication> .
+        {software_version_pattern}
       }}"""
 
     return f"""
     SELECT ?subject
-    WHERE {{ {annotation_patterns}{version_pattern} }}
+    WHERE {{ {annotation_patterns}{software_pattern} }}
     """
 
 
@@ -696,7 +688,6 @@ def add_benchmark_annotation(
     uuid: str,
     benchmark_rohub_identifier: str,
     code_repository_url: str | None = None,
-    software_url: str | None = None,
     use_production_rohub: bool = False,
 ) -> None:
     """Add benchmark semantic annotations to a RoHub research object."""
@@ -716,14 +707,6 @@ def add_benchmark_annotation(
             {
                 "property": CODE_REPOSITORY_PREDICATE,
                 "value": code_repository_url,
-            }
-        )
-
-    if software_url:
-        annotation_json.append(
-            {
-                "property": SOFTWARE_USED_PREDICATE,
-                "value": software_url,
             }
         )
 
@@ -765,7 +748,6 @@ def upload_provenance_rocrate(
             uuid=uuid,
             benchmark_rohub_identifier=benchmark_rohub_identifier,
             code_repository_url=code_repository_url,
-            software_url=software_url,
             use_production_rohub=use_production_rohub,
         )
 

@@ -12,7 +12,6 @@ _PROVENANCE_EXPORTS = {
     "ANNOTATION_PREDICATE",
     "BENCHMARK_BASE_URL",
     "CODE_REPOSITORY_PREDICATE",
-    "SOFTWARE_USED_PREDICATE",
     "FOAF_NAME",
     "build_published_runs_query",
     "build_run_named_graphs_query",
