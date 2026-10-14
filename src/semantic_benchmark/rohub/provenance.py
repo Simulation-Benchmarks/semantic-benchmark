@@ -56,21 +56,25 @@ def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
 
 
 def build_published_runs_query() -> str:
-    """Build a query for published benchmark runs and their software."""
+    """Build a query for runs linked to versioned benchmark research objects."""
     return """
-    PREFIX schemas: <https://schema.org/>
-    PREFIX schema: <http://schema.org/>
+    PREFIX schema: <https://schema.org/>
+    PREFIX schema_http: <http://schema.org/>
     PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
     PREFIX dcterms: <http://purl.org/dc/terms/>
 
-    SELECT DISTINCT ?run_id ?title ?benchmark_url ?branch_url ?benchmark_repo ?datePublished ?version
+    SELECT DISTINCT ?run_id ?title ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?benchmark_repo ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_url .
-        ?run_id schema:datePublished ?datePublished .
-        ?run_id schemas:codeRepository ?branch_url .
+        ?run_id schema_http:datePublished ?datePublished .
+        ?run_id schema:codeRepository ?branch_url .
         OPTIONAL { ?run_id dcterms:title ?title . }
-        ?benchmark_url schemas:codeRepository ?benchmark_repo .
-        ?benchmark_url schemas:version ?version .
+        ?benchmark_url dcterms:title ?benchmark_title .
+        ?benchmark_url m4i:investigates ?research_problem_uri .
+        ?benchmark_url schema:version ?version .
+        BIND(IRI(IF(CONTAINS(STR(?branch_url), "/tree/"),
+                    STRBEFORE(STR(?branch_url), "/tree/"),
+                    STR(?branch_url))) AS ?benchmark_repo)
     }
     """
 
