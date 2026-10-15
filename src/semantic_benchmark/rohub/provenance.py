@@ -27,10 +27,17 @@ def _load_json_config(filename: str) -> dict:
 
 
 ROHUB_CONFIG = _load_json_config("rohub_config.json")
-ANNOTATION_PREDICATE = "http://w3id.org/nfdi4ing/metadata4ing#investigates"
+SCHEMA = "https://schema.org/"
+SCHEMA_HTTP = "http://schema.org/"
+M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
+DCTERMS = "http://purl.org/dc/terms/"
+FOAF = "http://xmlns.com/foaf/0.1/"
+FORMAL_PARAMETER = "https://bioschemas.org/FormalParameter"
+
+ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
-CODE_REPOSITORY_PREDICATE = "https://schema.org/codeRepository"
-FOAF_NAME = "<http://xmlns.com/foaf/0.1/name>"
+CODE_REPOSITORY_PREDICATE = f"{SCHEMA}codeRepository"
+FOAF_NAME = f"<{FOAF}name>"
 
 
 def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
@@ -54,13 +61,33 @@ def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
     return software_url, software_version
 
 
+def build_benchmarks_query() -> str:
+    """Build a query for versioned benchmark research objects."""
+    return (
+        f"PREFIX schema: <{SCHEMA}>\n"
+        f"PREFIX m4i: <{M4I}>\n"
+        f"PREFIX dcterms: <{DCTERMS}>"
+        """
+
+    SELECT DISTINCT ?benchmark_url ?benchmark_title ?research_problem_uri ?version ?repo
+    WHERE {
+        ?benchmark_url dcterms:title ?benchmark_title .
+        ?benchmark_url m4i:investigates ?research_problem_uri .
+        ?benchmark_url schema:version ?version .
+        ?benchmark_url schema:codeRepository ?repo .
+    }
+    """
+    )
+
+
 def build_published_runs_query() -> str:
     """Build a query for runs linked to versioned benchmark research objects."""
-    return """
-    PREFIX schema: <https://schema.org/>
-    PREFIX schema_http: <http://schema.org/>
-    PREFIX m4i: <http://w3id.org/nfdi4ing/metadata4ing#>
-    PREFIX dcterms: <http://purl.org/dc/terms/>
+    return (
+        f"PREFIX schema: <{SCHEMA}>\n"
+        f"PREFIX schema_http: <{SCHEMA_HTTP}>\n"
+        f"PREFIX m4i: <{M4I}>\n"
+        f"PREFIX dcterms: <{DCTERMS}>"
+        """
 
     SELECT DISTINCT ?run_id ?title ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?datePublished ?version
     WHERE {
@@ -73,14 +100,15 @@ def build_published_runs_query() -> str:
         ?benchmark_url schema:version ?version .
     }
     """
+    )
 
 
 def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
     """Resolve run graphs and read their software metadata."""
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
-    PREFIX schema: <http://schema.org/>
-    PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+    PREFIX schema: <{SCHEMA_HTTP}>
+    PREFIX foaf: <{FOAF}>
     SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version
     WHERE {{
       VALUES ?run_id {{ {values} }}
@@ -146,7 +174,7 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
 def _node_type(node_prefix: str) -> str:
     """Return the RDF type used by a parameter or metric node."""
     if node_prefix == "param":
-        return "<https://bioschemas.org/FormalParameter>"
+        return f"<{FORMAL_PARAMETER}>"
     return "schema:PropertyValue"
 
 
@@ -249,7 +277,7 @@ def _format_query(
 ) -> str:
     """Format a complete SPARQL query."""
     return f"""
-    PREFIX schema: <http://schema.org/>
+    PREFIX schema: <{SCHEMA_HTTP}>
 
     SELECT {select_vars}
     WHERE {{
@@ -293,7 +321,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
             schema:object ?configuration .
         ?configuration a schema:PropertyValue ;
             schema:exampleOfWork ?field .
-        ?field a <https://bioschemas.org/FormalParameter> ;
+        ?field a <{FORMAL_PARAMETER}> ;
             {FOAF_NAME} ?field_name .
         BIND("parameter" AS ?field_type)
     }}
@@ -396,12 +424,12 @@ def build_annotated_ro_uuids_query(
         software_version_pattern = ""
         if software_version:
             software_version_pattern = f"""
-        {software} (<http://schema.org/version>|<https://schema.org/version>) ?version .
+        {software} (<{SCHEMA_HTTP}version>|<{SCHEMA}version>) ?version .
         FILTER(STR(?version) = "{_sparql_string_literal(software_version)}")"""
         software_pattern = f"""
       GRAPH ?graph {{
-        ?subject a <http://schema.org/Dataset> .
-        {software} a <http://schema.org/SoftwareApplication> .
+        ?subject a <{SCHEMA_HTTP}Dataset> .
+        {software} a <{SCHEMA_HTTP}SoftwareApplication> .
         {software_version_pattern}
       }}"""
 
@@ -428,7 +456,7 @@ def build_named_graph_query(
     ro_id_base = ROHUB_CONFIG[environment]["ro_id_base"]
 
     return f"""
-    PREFIX schema: <http://schema.org/>
+    PREFIX schema: <{SCHEMA_HTTP}>
     SELECT ?graph WHERE {{
         GRAPH ?graph {{ <https://w3id.org/{ro_id_base}/{uuid}> a schema:Dataset . }}
     }}

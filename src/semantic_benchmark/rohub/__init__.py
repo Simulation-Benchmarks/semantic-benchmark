@@ -14,6 +14,7 @@ _PROVENANCE_EXPORTS = {
     "CODE_REPOSITORY_PREDICATE",
     "FOAF_NAME",
     "build_published_runs_query",
+    "build_benchmarks_query",
     "build_run_named_graphs_query",
     "build_available_fields_query",
     "sanitize_variable_name",
