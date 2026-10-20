@@ -41,6 +41,12 @@ def parse_args(argv=None):
         help="Full GitHub branch URL to annotate as schema.org/codeRepository",
     )
     parser.add_argument(
+        "--benchmark-rohub-identifier",
+        type=str,
+        required=True,
+        help="RoHub identifier of the benchmark RO to annotate as m4i:investigates",
+    )
+    parser.add_argument(
         "--use-production-rohub",
         action="store_true",
         default=False,
@@ -59,6 +65,7 @@ def main():
         password=args.password,
         code_repository_url=args.code_repository_url,
         use_production_rohub=args.use_production_rohub,
+        benchmark_rohub_identifier=args.benchmark_rohub_identifier,
     )
 
 
