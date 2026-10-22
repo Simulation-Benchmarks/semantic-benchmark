@@ -602,7 +602,7 @@ def _add_run_actions(
     processing_steps: list[semantics.ProcessingStep],
     configuration_entries: list[ConfigurationEntry],
     run_results_by_name: dict[str, list[dict[str, str]]],
-    software_id: str,
+    workflow_id: str,
 ) -> None:
     """Add run action nodes connecting runs, configurations, and results.
 
@@ -613,7 +613,7 @@ def _add_run_actions(
         processing_steps: Benchmark processing steps to represent as actions.
         configuration_entries: Generated configuration metadata entries.
         run_results_by_name: Mapping from run folder name to result references.
-        software_id: JSON-LD id of the software application instrument.
+        workflow_id: JSON-LD id of the workflow file.
 
     Returns:
         None. The function mutates ``crate`` by adding ``CreateAction`` nodes.
@@ -640,7 +640,7 @@ def _add_run_actions(
                 "@type": "CreateAction",
                 "name": f"{step_name} {run_name}",
                 "object": [{"@id": run_object_id}],
-                "instrument": {"@id": software_id},
+                "instrument": {"@id": workflow_id},
             }
             if config_id:
                 run_action["object"].append({"@id": config_id})
@@ -737,8 +737,7 @@ def _add_workflow_node(
         source=str(workflow_path),
         lang=lang,
         properties={
-            "hasPart": {"@id": software_id},
-            "mainEntity": {"@id": workflow_id},
+            "hasPart": {"@id": software_id}
         },
     )
 
@@ -853,7 +852,7 @@ def create_main_ro(
             processing_steps=benchmark_object.processing_steps,
             configuration_entries=configuration_entries,
             run_results_by_name=run_results_by_name,
-            software_id=software_id,
+            workflow_id=workflow_id,
         )
         _configure_crate_metadata(
             crate,
