@@ -11,8 +11,9 @@ import tempfile
 import uuid
 import zipfile
 from pathlib import Path
-from typing import Any, Literal, TypedDict, get_args
+from typing import Any, TypedDict
 
+from rocrate.model.computationalworkflow import ComputationalWorkflow
 from rocrate.model.softwareapplication import SoftwareApplication
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
@@ -21,42 +22,32 @@ from semantic_benchmark.rocrate.validation import validate_rocrate
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 LOGGER = logging.getLogger(__name__)
 
-WorkflowLanguage = Literal["nextflow", "snakemake"]
-
 ROCRATE_CONFORMS_TO = [
-    {"@id": "https://w3id.org/ro/crate/1.1"},
-    {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"},
+    {"@id": "https://w3id.org/ro/crate/1.3"},
 ]
 ROOT_DATASET_CONFORMS_TO = [
-    {"@id": "https://w3id.org/ro/wfrun/process/0.4"},
-    {"@id": "https://w3id.org/ro/wfrun/workflow/0.4"},
-    {"@id": "https://w3id.org/ro/wfrun/provenance/0.4"},
-    {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0"},
+    {"@id": "https://w3id.org/ro/wfrun/process/0.6"},
+    {"@id": "https://w3id.org/ro/wfrun/workflow/0.6"},
+    {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
 PROFILE_CREATIVE_WORKS = (
     {
-        "@id": "https://w3id.org/ro/wfrun/process/0.4",
+        "@id": "https://w3id.org/ro/wfrun/process/0.6",
         "@type": "CreativeWork",
         "name": "Process Run Crate",
-        "version": "0.4",
+        "version": "0.6",
     },
     {
-        "@id": "https://w3id.org/ro/wfrun/workflow/0.4",
+        "@id": "https://w3id.org/ro/wfrun/workflow/0.6",
         "@type": "CreativeWork",
         "name": "Workflow Run Crate",
-        "version": "0.4",
+        "version": "0.6",
     },
     {
-        "@id": "https://w3id.org/ro/wfrun/provenance/0.4",
-        "@type": "CreativeWork",
-        "name": "Provenance Run Crate",
-        "version": "0.4",
-    },
-    {
-        "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.0",
+        "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1",
         "@type": "CreativeWork",
         "name": "Workflow RO-Crate",
-        "version": "1.0",
+        "version": "1.1",
     },
 )
 
@@ -150,23 +141,6 @@ def _add_subcrates_to_main(
         )
 
 
-def _create_action_object_ids(input_path: Path, subcrates: list[Path]) -> dict[str, str]:
-    """Map run folder names to relative subcrate object ids.
-
-    Args:
-        input_path: Root simulation result directory.
-        subcrates: Reporter RO-Crate ZIPs for completed runs.
-
-    Returns:
-        Mapping from run folder name to the subcrate ZIP path relative to
-        ``input_path``.
-    """
-    object_ids: dict[str, str] = {}
-    for subcrate in subcrates:
-        object_ids.setdefault(subcrate.parent.name, str(subcrate.relative_to(input_path)))
-    return object_ids
-
-
 def _formal_parameter_key(part: semantics.ParameterEntry) -> tuple[Any, ...]:
     """Build a stable de-duplication key for a benchmark parameter.
 
@@ -205,7 +179,9 @@ def _formal_parameter_payload(
     }
 
     unit = getattr(part, "unit", None)
-    payload["additionalType"] = ""
+    payload["additionalType"] = (
+        "Float" if isinstance(part, (semantics.NumericalParameter, semantics.NumericalVariable)) else "Text"
+    )
 
     if unit is not None:
         payload["unitText"] = {"@id": unit}
@@ -515,10 +491,10 @@ def _metric_result_payload(
         "@id": result_id,
         "@type": "PropertyValue",
         "name": metric.label,
-        "defaultValue": value,
+        "value": value,
     }
     if metric.unit:
-        payload["additionalType"] = metric.unit
+        payload["unitText"] = {"@id": metric.unit}
     return payload
 
 
@@ -597,12 +573,12 @@ def _configuration_entries_for_step(
 
 def _add_run_actions(
     crate: ROCrate,
-    subfolders: list[Path],
-    object_ids_by_run: dict[str, str],
+    subcrates: list[Path],
+    input_path: Path,
     processing_steps: list[semantics.ProcessingStep],
     configuration_entries: list[ConfigurationEntry],
     run_results_by_name: dict[str, list[dict[str, str]]],
-    software_id: str,
+    workflow_id: str,
 ) -> None:
     """Add run action nodes connecting runs, configurations, and results.
 
@@ -618,14 +594,11 @@ def _add_run_actions(
     Returns:
         None. The function mutates ``crate`` by adding ``CreateAction`` nodes.
     """
-    for run_folder in subfolders:
+    for subcrate in subcrates:
+        run_folder = subcrate.parent
         run_name = run_folder.name
-        run_object_id = object_ids_by_run.get(run_name)
-        if not run_object_id:
-            continue
-
         result_ids = run_results_by_name.get(run_name, [])
-
+        object_ids = []
         for processing_step in processing_steps:
             step_configuration_entries = _configuration_entries_for_step(
                 configuration_entries, processing_step
@@ -634,19 +607,20 @@ def _add_run_actions(
                 run_folder, step_configuration_entries
             )
 
-            step_name = processing_step.label or processing_step.id
-            run_action: dict[str, Any] = {
-                "@id": _new_jsonld_id(),
-                "@type": "CreateAction",
-                "name": f"{step_name} {run_name}",
-                "object": [{"@id": run_object_id}],
-                "instrument": {"@id": software_id},
-            }
             if config_id:
-                run_action["object"].append({"@id": config_id})
-            if result_ids:
-                run_action["result"] = result_ids
-            crate.add_jsonld(run_action)
+                object_ids.append({"@id": config_id})
+        run_action: dict[str, Any] = {
+            "@id": _new_jsonld_id(),
+            "@type": "CreateAction",
+            "name": f"Benchmark run {run_name}",
+            "instrument": {"@id": workflow_id},
+            "result": [{"@id": str(subcrate.relative_to(input_path))}, *result_ids],
+        }
+        if object_ids:
+            run_action["object"] = object_ids
+        action_id = run_action["@id"]
+        crate.add_jsonld(run_action)
+        crate.root_dataset.append_to("mentions", {"@id": action_id})
 
 
 def _configure_crate_metadata(
@@ -718,29 +692,28 @@ def _add_workflow_node(
     crate: ROCrate,
     workflow_path: Path,
     software_id: str,
-    workflow_id: str,
-    lang: WorkflowLanguage,
+    agent_name: str,
+    agent_orcid: str,
 ) -> None:
     """Add the main workflow file to the aggregate crate.
 
     Args:
         crate: Aggregate RO-Crate being built.
         workflow_path: Location of the workflow file to add.
-        software_id: JSON-LD id of the software application linked as ``hasPart``.
-        workflow_id: JSON-LD id of the workflow file.
-        lang: Workflow language used by the workflow file.
+        software_id: JSON-LD id of the software application requirement.
+        agent_name: Name of the workflow author and creator.
+        agent_orcid: ORCID URL identifying the author and creator.
 
     Returns:
         None. The function mutates ``crate``.
     """
-    crate.add_workflow(
-        source=str(workflow_path),
-        lang=lang,
-        properties={
-            "hasPart": {"@id": software_id},
-            "mainEntity": {"@id": workflow_id},
-        },
-    )
+    workflow = crate.add(ComputationalWorkflow(crate, source=str(workflow_path)))
+    workflow["encodingFormat"] = "application/yaml"
+    workflow["softwareRequirements"] = {"@id": software_id}
+    person = {"@id": agent_orcid}
+    workflow["author"] = person
+    workflow["creator"] = person
+    crate.add_jsonld({"@id": agent_orcid, "@type": "Person", "name": agent_name})
 
 
 def create_main_ro(
@@ -752,12 +725,13 @@ def create_main_ro(
     crate_name: str,
     crate_description: str,
     subcrate_paths: list[str | Path],
-    workflow_path: str | Path | None = None,
-    lang: WorkflowLanguage = "snakemake",
+    workflow_path: str | Path = "",
     validation_profile: str | None = None,
     validation_dir: str | Path | None = None,
     software_url: str | None = None,
     software_version: str | None = None,
+    agent_name: str | None = None,
+    agent_orcid: str | None = None,
 ) -> None:
     """Create and write an aggregate RO-Crate for a benchmark result directory.
 
@@ -770,9 +744,7 @@ def create_main_ro(
         crate_license: License URL stored on the aggregate RO-Crate.
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
-        workflow_path: Location of the workflow file to add to the crate. Defaults
-            to the workflow found alongside the first subcrate.
-        lang: Workflow language. Defaults to ``snakemake``.
+        workflow_path: Required YAML workflow file to add as the main entity.
         validation_profile: Optional RO-Crate profile identifier. When provided,
             the written crate is unpacked and validated against this profile.
         validation_dir: Optional directory used for unpacked validation content.
@@ -780,6 +752,8 @@ def create_main_ro(
         software_url: Stable software identifier (for example, a zbMATH URL).
             If omitted, a local identifier is generated.
         software_version: Software version to record, if known.
+        agent_name: Name supplied by the reporter configuration.
+        agent_orcid: ORCID URL supplied by the reporter configuration.
         subcrate_paths: Exact reporter RO-Crate ZIPs to include.
 
     Returns:
@@ -788,20 +762,23 @@ def create_main_ro(
 
     Raises:
         NotADirectoryError: If ``path`` is not a directory.
-        FileNotFoundError: If the explicit or inferred workflow path is not a file.
-        ValueError: If ``lang`` is unsupported or no matching subcrate zip files
-            are found.
+        FileNotFoundError: If the workflow path is not a file.
+        ValueError: If no matching subcrate zip files are found.
     """
-    crate = ROCrate(version="1.1")
+    crate = ROCrate(version="1.3")
     input_path = Path(path)
 
     if not input_path.is_dir():
         raise NotADirectoryError(f"{path} is not a valid directory")
-    if lang not in get_args(WorkflowLanguage):
-        raise ValueError(
-            f"Unsupported workflow language {lang!r}; expected one of "
-            f"{', '.join(get_args(WorkflowLanguage))}"
-        )
+    if not workflow_path:
+        raise ValueError("workflow_path is required")
+    if not agent_name or not agent_orcid:
+        raise ValueError("agent_name and agent_orcid are required")
+    workflow_file = Path(workflow_path).resolve()
+    if not workflow_file.is_file():
+        raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
+    if workflow_file.suffix.lower() not in {".yaml", ".yml"}:
+        raise ValueError("workflow_path must be a YAML file")
     LOGGER.info(
         "Creating aggregate RO-Crate from simulation results in %s...",
         input_path,
@@ -825,35 +802,23 @@ def create_main_ro(
 
         _add_subcrates_to_main(crate, subcrates, input_path)
 
-        object_ids_by_run = _create_action_object_ids(input_path, subcrates)
         configuration_entries = _add_configuration_nodes(crate, benchmark_object)
         run_results = _add_evaluates_nodes(
             crate, benchmark_object, extracted_subfolders
         )
         run_results_by_name = _run_results_by_name(run_results)
 
-        workflow_id = get_workflow_id(
-            subcrates[0],
-            fallback=Path(workflow_path).name if workflow_path is not None else "Snakefile",
-        )
-        workflow_file = (
-            Path(workflow_path)
-            if workflow_path is not None
-            else extraction_path / subcrates[0].parent.relative_to(input_path) / workflow_id
-        )
-        if not workflow_file.is_file():
-            raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
-
+        workflow_id = workflow_file.name
         software_id = software_url or _new_jsonld_id()
 
         _add_run_actions(
             crate=crate,
-            subfolders=subfolders,
-            object_ids_by_run=object_ids_by_run,
+            subcrates=subcrates,
+            input_path=input_path,
             processing_steps=benchmark_object.processing_steps,
             configuration_entries=configuration_entries,
             run_results_by_name=run_results_by_name,
-            software_id=software_id,
+            workflow_id=workflow_id,
         )
         _configure_crate_metadata(
             crate,
@@ -864,7 +829,7 @@ def create_main_ro(
         )
         _add_software_node(crate, software_id, software_name, software_version)
         _add_profile_creative_works(crate)
-        _add_workflow_node(crate, workflow_file, software_id, workflow_id, lang)
+        _add_workflow_node(crate, workflow_file, software_id, agent_name, agent_orcid)
 
         crate.write_zip(rocrate_path)
 
@@ -949,19 +914,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Description recorded in the generated aggregate RO-Crate",
     )
     parser.add_argument(
-        "--lang",
-        dest="workflow_lang",
-        default="snakemake",
-        choices=get_args(WorkflowLanguage),
-        help="Language of the workflow file (default: snakemake)",
+        "--workflow-path",
+        required=True,
+        help="Path to the YAML workflow file used as the main entity",
     )
     parser.add_argument(
-        "--workflow-path",
-        default=None,
-        help=(
-            "Path to the workflow file added to the generated RO-Crate "
-            "(default: workflow alongside the first subcrate)"
-        ),
+        "--agent-name",
+        required=True,
+        help="Workflow author and creator name from report-rocrate-agent-name",
+    )
+    parser.add_argument(
+        "--agent-orcid",
+        required=True,
+        help="Workflow author and creator ORCID URL from report-rocrate-agent-orcid",
     )
     parser.add_argument(
         "--validation-profile",
@@ -999,21 +964,11 @@ def main() -> None:
         crate_description=args.crate_description,
         subcrate_paths=args.subcrate_paths,
         workflow_path=args.workflow_path,
-        lang=args.workflow_lang,
+        agent_name=args.agent_name,
+        agent_orcid=args.agent_orcid,
         validation_profile=args.validation_profile,
         validation_dir=args.validation_dir,
     )
-
-
-def get_workflow_id(subcrate: str | Path, fallback: str = "Snakefile") -> str:
-    """Return the computational workflow id stored in a subcrate."""
-    crate = ROCrate(subcrate)
-
-    for e in crate.get_entities():
-        if e.type == ["ComputationalWorkflow"]:
-            return e.id
-
-    return fallback
 
 
 if __name__ == "__main__":
