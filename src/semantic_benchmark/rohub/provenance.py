@@ -31,13 +31,11 @@ SCHEMA = "https://schema.org/"
 SCHEMA_HTTP = "http://schema.org/"
 M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
 DCTERMS = "http://purl.org/dc/terms/"
-FOAF = "http://xmlns.com/foaf/0.1/"
-FORMAL_PARAMETER = "https://bioschemas.org/FormalParameter"
+FORMAL_PARAMETER = "https://bioschemas.org/terms/FormalParameter"
 
 ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = f"{SCHEMA}codeRepository"
-FOAF_NAME = f"<{FOAF}name>"
 
 
 def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
@@ -108,7 +106,6 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
-    PREFIX foaf: <{FOAF}>
     SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version
     WHERE {{
       VALUES ?run_id {{ {values} }}
@@ -116,7 +113,7 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
         ?run_id a schema:Dataset .
         OPTIONAL {{
           ?software_url a schema:SoftwareApplication .
-          OPTIONAL {{ ?software_url foaf:name ?software_name . }}
+          OPTIONAL {{ ?software_url schema:name ?software_name . }}
           OPTIONAL {{ ?software_url schema:version ?software_version . }}
         }}
       }}
@@ -164,7 +161,7 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
         links.extend(
             [
                 "?software a schema:SoftwareApplication .",
-                f"?software {FOAF_NAME} ?tool_name .",
+                "?software schema:name ?tool_name .",
             ]
         )
 
@@ -190,11 +187,12 @@ def _value_block(
     safe_name = var_map[name]
     escaped_name = _sparql_string_literal(name)
 
+    value_predicate = "schema:defaultValue" if node_prefix == "param" else "schema:value"
     return f"""
     {parent} {relation} ?{node_prefix}_{safe_name} .
     ?{node_prefix}_{safe_name} a {_node_type(node_prefix)} ;
         {name_predicate} "{escaped_name}" ;
-        schema:defaultValue ?{safe_name} .
+        {value_predicate} ?{safe_name} .
     """.strip()
 
 
@@ -300,9 +298,9 @@ def build_dynamic_query(
     inner_query = _join_blocks(
         "\n".join(_create_action_links(include_tool=True)),
         "\n".join(
-            _parameter_block(name, var_map, FOAF_NAME) for name in parameters
+            _parameter_block(name, var_map) for name in parameters
         ),
-        "\n".join(_metric_block(name, var_map, FOAF_NAME) for name in metrics),
+        "\n".join(_metric_block(name, var_map) for name in metrics),
     )
 
     order_name = parameters[0] if parameters else None
@@ -322,7 +320,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
         ?configuration a schema:PropertyValue ;
             schema:exampleOfWork ?field .
         ?field a <{FORMAL_PARAMETER}> ;
-            {FOAF_NAME} ?field_name .
+            schema:name ?field_name .
         BIND("parameter" AS ?field_type)
     }}
     UNION
@@ -330,7 +328,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
         ?runAction a schema:CreateAction ;
             schema:result ?field .
         ?field a schema:PropertyValue ;
-            {FOAF_NAME} ?field_name .
+            schema:name ?field_name .
         BIND("metric" AS ?field_type)
     }}
     """.strip()
