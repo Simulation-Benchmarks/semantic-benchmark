@@ -37,6 +37,7 @@ FORMAL_PARAMETER = "https://bioschemas.org/terms/FormalParameter"
 ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
 CODE_REPOSITORY_PREDICATE = f"{SCHEMA}codeRepository"
+FOAF_NAME = f"<{FOAF}name>"
 
 
 def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
@@ -163,7 +164,7 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
         links.extend(
             [
                 "?software a schema:SoftwareApplication .",
-                f"?software <{FOAF}name> ?tool_name .",
+                f"?software {FOAF_NAME} ?tool_name .",
             ]
         )
 
@@ -201,7 +202,7 @@ def _value_block(
 def _parameter_block(
     name: str,
     var_map: dict[str, str],
-    name_predicate: str = "schema:name",
+    name_predicate: str = FOAF_NAME,
 ) -> str:
     """Build a graph pattern that extracts one configuration parameter."""
     return _value_block(
@@ -217,7 +218,7 @@ def _parameter_block(
 def _metric_block(
     name: str,
     var_map: dict[str, str],
-    name_predicate: str = "schema:name",
+    name_predicate: str = FOAF_NAME,
 ) -> str:
     """Build an optional graph pattern that extracts one run metric."""
     value_block = _value_block(
@@ -322,7 +323,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
         ?configuration a schema:PropertyValue ;
             schema:exampleOfWork ?field .
         ?field a <{FORMAL_PARAMETER}> ;
-            schema:name ?field_name .
+            {FOAF_NAME} ?field_name .
         BIND("parameter" AS ?field_type)
     }}
     UNION
@@ -330,7 +331,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
         ?runAction a schema:CreateAction ;
             schema:result ?field .
         ?field a schema:PropertyValue ;
-            schema:name ?field_name .
+            {FOAF_NAME} ?field_name .
         BIND("metric" AS ?field_type)
     }}
     """.strip()
