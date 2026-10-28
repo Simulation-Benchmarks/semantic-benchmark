@@ -31,6 +31,7 @@ SCHEMA = "https://schema.org/"
 SCHEMA_HTTP = "http://schema.org/"
 M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
 DCTERMS = "http://purl.org/dc/terms/"
+FOAF = "http://xmlns.com/foaf/0.1/"
 FORMAL_PARAMETER = "https://bioschemas.org/terms/FormalParameter"
 
 ANNOTATION_PREDICATE = f"{M4I}investigates"
@@ -106,6 +107,7 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
+    PREFIX foaf: <{FOAF}>
     SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version
     WHERE {{
       VALUES ?run_id {{ {values} }}
@@ -113,7 +115,7 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
         ?run_id a schema:Dataset .
         OPTIONAL {{
           ?software_url a schema:SoftwareApplication .
-          OPTIONAL {{ ?software_url schema:name ?software_name . }}
+          OPTIONAL {{ ?software_url foaf:name ?software_name . }}
           OPTIONAL {{ ?software_url schema:version ?software_version . }}
         }}
       }}
@@ -161,7 +163,7 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
         links.extend(
             [
                 "?software a schema:SoftwareApplication .",
-                "?software schema:name ?tool_name .",
+                f"?software <{FOAF}name> ?tool_name .",
             ]
         )
 
