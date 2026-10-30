@@ -60,8 +60,8 @@ It accepts `--provenance_folderpath` (the RO-Crate ZIP), `--benchmark-name`,
 `--use-production-rohub` arguments. The software URL and version are read from
 the SoftwareApplication node in the RO-Crate ZIP.
 
-`semantic_benchmark.rocrate.create_main_ro(...)` can validate the generated
-aggregate crate by passing `validation_profile`. The package writes the RO-Crate
+`semantic_benchmark.rocrate.create_main_ro(...)` always validates the generated
+aggregate crate against `workflow-run-crate-0.5`. The package writes the RO-Crate
 zip, unpacks it to a validation directory, and runs `validate_rocrate(...)`.
 Aggregate creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
 from completed runs, and `workflow_path`, a YAML file used as the main workflow.

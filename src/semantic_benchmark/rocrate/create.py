@@ -6,7 +6,6 @@ import argparse
 import json
 import logging
 import re
-import shutil
 import tempfile
 import uuid
 import zipfile
@@ -30,6 +29,7 @@ ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/wfrun/workflow/0.6"},
     {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
+AGGREGATE_VALIDATION_PROFILE = "workflow-run-crate-0.5"
 PROFILE_CREATIVE_WORKS = (
     {
         "@id": "https://w3id.org/ro/wfrun/process/0.6",
@@ -726,8 +726,6 @@ def create_main_ro(
     crate_description: str,
     subcrate_paths: list[str | Path],
     workflow_path: str | Path = "",
-    validation_profile: str | None = None,
-    validation_dir: str | Path | None = None,
     software_url: str | None = None,
     software_version: str | None = None,
     agent_name: str | None = None,
@@ -745,10 +743,6 @@ def create_main_ro(
         crate_name: Human-readable name stored on the aggregate RO-Crate.
         crate_description: Description stored on the aggregate RO-Crate.
         workflow_path: Required YAML workflow file to add as the main entity.
-        validation_profile: Optional RO-Crate profile identifier. When provided,
-            the written crate is unpacked and validated against this profile.
-        validation_dir: Optional directory used for unpacked validation content.
-            Defaults to ``unpacked_rocrate`` next to ``rocrate_path``.
         software_url: Stable software identifier (for example, a zbMATH URL).
             If omitted, a local identifier is generated.
         software_version: Software version to record, if known.
@@ -833,24 +827,14 @@ def create_main_ro(
 
         crate.write_zip(rocrate_path)
 
-    if validation_profile:
-        validation_path = Path(validation_dir) if validation_dir else (
-            Path(rocrate_path).parent / "unpacked_rocrate"
+    with tempfile.TemporaryDirectory(prefix="benchmark-validation-") as validation_dir:
+        with zipfile.ZipFile(rocrate_path, "r") as zip_ref:
+            zip_ref.extractall(validation_dir)
+
+        validate_rocrate(
+            rocrate_path=validation_dir,
+            profile=AGGREGATE_VALIDATION_PROFILE,
         )
-        if validation_path.exists():
-            shutil.rmtree(validation_path)
-        validation_path.mkdir(parents=True, exist_ok=True)
-
-        try:
-            with zipfile.ZipFile(rocrate_path, "r") as zip_ref:
-                zip_ref.extractall(validation_path)
-
-            validate_rocrate(
-                rocrate_path=str(validation_path),
-                profile=validation_profile,
-            )
-        finally:
-            shutil.rmtree(validation_path)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -928,16 +912,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Workflow author and creator ORCID URL from report-rocrate-agent-orcid",
     )
-    parser.add_argument(
-        "--validation-profile",
-        default=None,
-        help="Optional RO-Crate profile identifier used to validate the generated crate",
-    )
-    parser.add_argument(
-        "--validation-dir",
-        default=None,
-        help="Optional directory for unpacked validation content",
-    )
 
     return parser.parse_args(argv)
 
@@ -966,8 +940,6 @@ def main() -> None:
         workflow_path=args.workflow_path,
         agent_name=args.agent_name,
         agent_orcid=args.agent_orcid,
-        validation_profile=args.validation_profile,
-        validation_dir=args.validation_dir,
     )
 
 
