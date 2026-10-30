@@ -64,7 +64,14 @@ the SoftwareApplication node in the RO-Crate ZIP.
 aggregate crate by passing `validation_profile`. The package writes the RO-Crate
 zip, unpacks it to a validation directory, and runs `validate_rocrate(...)`.
 Aggregate creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
-from completed runs. The CLI accepts one `--subcrate-path` per run.
+from completed runs, and `workflow_path`, a YAML file used as the main workflow.
+The CLI accepts `--workflow-path` and one `--subcrate-path` per run. Each subcrate
+is the result of a `CreateAction` whose instrument is the YAML workflow; matched
+configuration values are action inputs and extracted metrics are action results.
+Pass `agent_name` and `agent_orcid` from the reporter configuration's
+`report-rocrate-agent-name` and `report-rocrate-agent-orcid` values. They identify
+the workflow author and creator in the aggregate crate. The CLI accepts
+`--agent-name` and `--agent-orcid`.
 
 Repository-specific projects can override the packaged RoHub defaults with:
 

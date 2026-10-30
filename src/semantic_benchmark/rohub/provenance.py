@@ -32,7 +32,7 @@ SCHEMA_HTTP = "http://schema.org/"
 M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
 DCTERMS = "http://purl.org/dc/terms/"
 FOAF = "http://xmlns.com/foaf/0.1/"
-FORMAL_PARAMETER = "https://bioschemas.org/FormalParameter"
+FORMAL_PARAMETER = "https://bioschemas.org/terms/FormalParameter"
 
 ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
@@ -194,14 +194,14 @@ def _value_block(
     {parent} {relation} ?{node_prefix}_{safe_name} .
     ?{node_prefix}_{safe_name} a {_node_type(node_prefix)} ;
         {name_predicate} "{escaped_name}" ;
-        schema:defaultValue ?{safe_name} .
+        schema:value ?{safe_name} .
     """.strip()
 
 
 def _parameter_block(
     name: str,
     var_map: dict[str, str],
-    name_predicate: str = "schema:name",
+    name_predicate: str = FOAF_NAME,
 ) -> str:
     """Build a graph pattern that extracts one configuration parameter."""
     return _value_block(
@@ -217,7 +217,7 @@ def _parameter_block(
 def _metric_block(
     name: str,
     var_map: dict[str, str],
-    name_predicate: str = "schema:name",
+    name_predicate: str = FOAF_NAME,
 ) -> str:
     """Build an optional graph pattern that extracts one run metric."""
     value_block = _value_block(
@@ -300,9 +300,9 @@ def build_dynamic_query(
     inner_query = _join_blocks(
         "\n".join(_create_action_links(include_tool=True)),
         "\n".join(
-            _parameter_block(name, var_map, FOAF_NAME) for name in parameters
+            _parameter_block(name, var_map) for name in parameters
         ),
-        "\n".join(_metric_block(name, var_map, FOAF_NAME) for name in metrics),
+        "\n".join(_metric_block(name, var_map) for name in metrics),
     )
 
     order_name = parameters[0] if parameters else None
