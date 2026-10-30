@@ -22,7 +22,7 @@ LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 LOGGER = logging.getLogger(__name__)
 
 ROCRATE_CONFORMS_TO = [
-    {"@id": "https://w3id.org/ro/crate/1.3"},
+    {"@id": "https://w3id.org/ro/crate/1.1"},
 ]
 ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/wfrun/process/0.6"},
@@ -688,6 +688,21 @@ def _add_software_node(
     )
 
 
+def _add_yaml_language_node(crate: ROCrate) -> dict[str, str]:
+    """Add the YAML language node and return its JSON-LD reference."""
+    yaml_id = "https://www.wikidata.org/entity/Q281876"
+    crate.add_jsonld(
+        {
+            "@id": yaml_id,
+            "@type": "ComputerLanguage",
+            "identifier": yaml_id,
+            "name": "YAML",
+            "url": "https://yaml.org/",
+        }
+    )
+    return {"@id": yaml_id}
+
+
 def _add_workflow_node(
     crate: ROCrate,
     workflow_path: Path,
@@ -710,6 +725,7 @@ def _add_workflow_node(
     workflow = crate.add(ComputationalWorkflow(crate, source=str(workflow_path)))
     workflow["encodingFormat"] = "application/yaml"
     workflow["softwareRequirements"] = {"@id": software_id}
+    workflow["programmingLanguage"] = _add_yaml_language_node(crate)
     person = {"@id": agent_orcid}
     workflow["author"] = person
     workflow["creator"] = person
@@ -759,7 +775,7 @@ def create_main_ro(
         FileNotFoundError: If the workflow path is not a file.
         ValueError: If no matching subcrate zip files are found.
     """
-    crate = ROCrate(version="1.3")
+    crate = ROCrate(version="1.1")
     input_path = Path(path)
 
     if not input_path.is_dir():
