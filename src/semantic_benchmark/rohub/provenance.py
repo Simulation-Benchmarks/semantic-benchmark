@@ -194,7 +194,7 @@ def _value_block(
     {parent} {relation} ?{node_prefix}_{safe_name} .
     ?{node_prefix}_{safe_name} a {_node_type(node_prefix)} ;
         {name_predicate} "{escaped_name}" ;
-        schema:value ?{safe_name} .
+        schema:defaultValue ?{safe_name} .
     """.strip()
 
 
