@@ -32,7 +32,7 @@ SCHEMA_HTTP = "http://schema.org/"
 M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
 DCTERMS = "http://purl.org/dc/terms/"
 FOAF = "http://xmlns.com/foaf/0.1/"
-FORMAL_PARAMETER = "https://bioschemas.org/terms/FormalParameter"
+FORMAL_PARAMETER = "https://bioschemas.org/FormalParameter"
 
 ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
