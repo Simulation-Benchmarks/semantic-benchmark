@@ -187,9 +187,9 @@ def _formal_parameter_payload(
         payload["unitText"] = {"@id": unit}
 
     if isinstance(part, semantics.NumericalParameter):
-        payload["defaultValue"] = part.numerical_value
+        payload["value"] = part.numerical_value
     elif isinstance(part, semantics.TextParameter):
-        payload["defaultValue"] = part.string_value
+        payload["value"] = part.string_value
     elif (
         isinstance(part, semantics.NumericalVariable)
         and part.quantity_kind is not None
