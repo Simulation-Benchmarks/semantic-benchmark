@@ -27,9 +27,10 @@ ROCRATE_CONFORMS_TO = [
 ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/wfrun/process/0.6"},
     {"@id": "https://w3id.org/ro/wfrun/workflow/0.6"},
+    {"@id": "https://w3id.org/ro/wfrun/provenance/0.6"},
     {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
-AGGREGATE_VALIDATION_PROFILE = "workflow-run-crate-0.5"
+AGGREGATE_VALIDATION_PROFILE = "provenance-run-crate-0.5"
 PROFILE_CREATIVE_WORKS = (
     {
         "@id": "https://w3id.org/ro/wfrun/process/0.6",
@@ -42,6 +43,12 @@ PROFILE_CREATIVE_WORKS = (
         "@type": "CreativeWork",
         "name": "Workflow Run Crate",
         "version": "0.6",
+    },
+    {
+        "@id": "https://w3id.org/ro/wfrun/provenance/0.6",
+        "@type": "CreativeWork",
+        "name": "Provenance Run Crate",
+        "version": "0.6"
     },
     {
         "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1",
