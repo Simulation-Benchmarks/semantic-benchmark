@@ -522,8 +522,16 @@ def _add_evaluates_nodes(
         json_cache: dict[Path, Any] = {}
         run_metric_results: list[dict[str, str]] = []
         for metric in benchmark_object.evaluates:
-            value, _ = _extract_evaluated_value(run_folder, metric, json_cache)
+            value, source_file = _extract_evaluated_value(run_folder, metric, json_cache)
             if value is None:
+                LOGGER.warning(
+                    "Metric %s (%s) was not computed or could not be extracted "
+                    "for run %s (source: %s)",
+                    metric.label,
+                    metric.id,
+                    run_folder.name,
+                    source_file or "no source file mapping",
+                )
                 continue
 
             result_id = _new_jsonld_id()
