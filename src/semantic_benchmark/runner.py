@@ -6,7 +6,7 @@ import re
 import shutil
 import zipfile
 from pathlib import Path
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import Any, Mapping
 
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
@@ -110,12 +110,14 @@ def prepare_benchmark(
     resource_dir: Path | None = None,
     shared_directories: Iterable[str] = (),
     strict_units: bool = False,
+    setup_phase: Callable[[SemanticBenchmark, Path], None] | None = None,
 ) -> SemanticBenchmark:
     """Prepare common inputs and load a semantic benchmark run.
 
     Optionally extracts a workflow archive, stages benchmark resources, creates
     shared workflow directories, and always generates the configuration
-    parameter files.
+    parameter files. If provided, ``setup_phase`` runs once after preparation
+    and before callers begin their per-configuration workflows.
     Unit suffixes use only ``unit_symbols``; ``strict_units`` is retained as a
     compatibility argument and does not require mappings for every unit.
     """
@@ -133,6 +135,8 @@ def prepare_benchmark(
         unit_symbols,
         strict_units=strict_units,
     )
+    if setup_phase is not None:
+        setup_phase(benchmark, benchmark_dir)
     return benchmark
 
 
