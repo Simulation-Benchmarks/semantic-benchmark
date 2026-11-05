@@ -159,38 +159,19 @@ def prepare_configuration(
     return configuration, output_dir
 
 
-def _reporter_archive_stem(tool_name: str, configuration: str) -> str:
-    return f"{tool_name}-{configuration}"
-
-
-def build_provenance_reporter_args(
-    configuration: str,
-    *,
-    tool_name: str,
-    report_name: str,
-    report_description: str,
-    report_license: str,
-) -> list[str]:
-    """Build metadata4ing reporter arguments for a workflow invocation."""
+def build_provenance_reporter_args(profile_dir: Path) -> list[str]:
+    """Build RO-Crate reporter arguments for a workflow invocation."""
     return [
         "--reporter",
-        "metadata4ing",
-        "--report-metadata4ing-filename",
-        _reporter_archive_stem(tool_name, configuration),
-        "--report-metadata4ing-name",
-        report_name,
-        "--report-metadata4ing-description",
-        report_description,
-        "--report-metadata4ing-license",
-        report_license,
-        "--report-metadata4ing-profile",
-        "provenance-run-crate-0.5",
+        "rocrate",
+        "--profile",
+        str(profile_dir.resolve()),
     ]
 
 
-def reporter_rocrate_path(output_dir: Path, configuration: str, tool_name: str) -> Path:
-    """Return the ZIP path set by ``--report-metadata4ing-filename``."""
-    return output_dir / f"{_reporter_archive_stem(tool_name, configuration)}.zip"
+def reporter_rocrate_path(output_dir: Path) -> Path:
+    """Return the ZIP path set by the workflow's reporter profile."""
+    return output_dir / "workflow-run.zip"
 
 
 def create_aggregate_rocrate(
