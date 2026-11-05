@@ -184,7 +184,9 @@ def create_aggregate_rocrate(
     crate_name: str,
     crate_description: str,
     subcrate_paths: list[str | Path],
-    validation_dir: Path | None = None,
+    workflow_path: str | Path,
+    agent_name: str,
+    agent_orcid: str,
     software_url: str | None = None,
     software_version: str | None = None,
 ) -> None:
@@ -193,9 +195,6 @@ def create_aggregate_rocrate(
     # the core runner helpers remain available without the ``rocrate`` extra.
     from . import rocrate
 
-    options = {}
-    if validation_dir is not None:
-        options["validation_dir"] = validation_dir
     rocrate.create_main_ro(
         path=str(results_dir),
         benchmark_object=benchmark,
@@ -207,6 +206,7 @@ def create_aggregate_rocrate(
         crate_name=crate_name,
         crate_description=crate_description,
         subcrate_paths=subcrate_paths,
-        validation_profile="provenance-run-crate-0.5",
-        **options,
+        workflow_path=workflow_path,
+        agent_name=agent_name,
+        agent_orcid=agent_orcid,
     )
