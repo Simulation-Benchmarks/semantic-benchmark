@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from typing import Any, Mapping
 
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
-from .profiles import build_subcrate_args, load_aggregate_profile
+from .profiles import load_aggregate_profile
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 
@@ -163,16 +163,6 @@ def prepare_configuration(
         ):
             shutil.copy(item, output_dir / item.name)
     return configuration, output_dir
-
-
-def build_provenance_reporter_args(profile_dir: Path) -> list[str]:
-    """Build RO-Crate reporter arguments for a workflow invocation."""
-    return [
-        "--reporter",
-        "rocrate",
-        "--profile",
-        str(profile_dir.resolve()),
-    ]
 
 
 def reporter_rocrate_path(output_dir: Path) -> Path:
