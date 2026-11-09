@@ -16,6 +16,8 @@ from rocrate.model.computationalworkflow import ComputationalWorkflow
 from rocrate.model.softwareapplication import SoftwareApplication
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
+from semantic_benchmark.semantics.models import AggregateProfile
+from semantic_benchmark.profiles import load_aggregate_profile
 from semantic_benchmark.rocrate.validation import validate_rocrate
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
@@ -744,16 +746,9 @@ def create_main_ro(
     path: str,
     benchmark_object: semantics.SemanticBenchmark,
     rocrate_path: str,
-    software_name: str,
-    crate_license: str,
-    crate_name: str,
-    crate_description: str,
     subcrate_paths: list[str | Path],
+    aggregate_profile: AggregateProfile,
     workflow_path: str | Path = "",
-    software_url: str | None = None,
-    software_version: str | None = None,
-    agent_name: str | None = None,
-    agent_orcid: str | None = None,
 ) -> None:
     """Create and write an aggregate RO-Crate for a benchmark result directory.
 
@@ -762,16 +757,8 @@ def create_main_ro(
         benchmark_object: Parsed benchmark description used to create configuration
             and metric nodes.
         rocrate_path: Output zip filename/path for the aggregate crate.
-        software_name: Software name recorded as the run action instrument.
-        crate_license: License URL stored on the aggregate RO-Crate.
-        crate_name: Human-readable name stored on the aggregate RO-Crate.
-        crate_description: Description stored on the aggregate RO-Crate.
+        aggregate_profile: Loaded aggregate crate metadata.
         workflow_path: Required YAML workflow file to add as the main entity.
-        software_url: Stable software identifier (for example, a zbMATH URL).
-            If omitted, a local identifier is generated.
-        software_version: Software version to record, if known.
-        agent_name: Name supplied by the reporter configuration.
-        agent_orcid: ORCID URL supplied by the reporter configuration.
         subcrate_paths: Exact reporter RO-Crate ZIPs to include.
 
     Returns:
@@ -783,6 +770,10 @@ def create_main_ro(
         FileNotFoundError: If the workflow path is not a file.
         ValueError: If no matching subcrate zip files are found.
     """
+    metadata = aggregate_profile
+    software_name = metadata.software_name
+    software_url = metadata.software_url
+    software_version = metadata.software_version
     crate = ROCrate(version="1.1")
     input_path = Path(path)
 
@@ -790,8 +781,6 @@ def create_main_ro(
         raise NotADirectoryError(f"{path} is not a valid directory")
     if not workflow_path:
         raise ValueError("workflow_path is required")
-    if not agent_name or not agent_orcid:
-        raise ValueError("agent_name and agent_orcid are required")
     workflow_file = Path(workflow_path).resolve()
     if not workflow_file.is_file():
         raise FileNotFoundError(f"{workflow_file} is not a valid workflow file")
@@ -841,13 +830,13 @@ def create_main_ro(
         _configure_crate_metadata(
             crate,
             workflow_id,
-            crate_license=crate_license,
-            crate_name=crate_name,
-            crate_description=crate_description,
+            crate_license=metadata.crate_license,
+            crate_name=metadata.crate_name,
+            crate_description=metadata.crate_description,
         )
         _add_software_node(crate, software_id, software_name, software_version)
         _add_profile_creative_works(crate)
-        _add_workflow_node(crate, workflow_file, software_id, agent_name, agent_orcid)
+        _add_workflow_node(crate, workflow_file, software_id, metadata.agent_name, metadata.agent_orcid)
 
         crate.write_zip(rocrate_path)
 
@@ -894,48 +883,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Path for the generated RO-Crate zip file",
     )
     parser.add_argument(
-        "--software-name",
-        required=True,
-        help="Name of the software application recorded in the generated RO-Crate",
-    )
-    parser.add_argument(
-        "--software-url",
-        help="Stable URL identifying the software application",
-    )
-    parser.add_argument(
-        "--software-version",
-        help="Version of the software application",
-    )
-    parser.add_argument(
-        "--crate-license",
-        required=True,
-        help="License URL recorded in the generated aggregate RO-Crate",
-    )
-    parser.add_argument(
-        "--crate-name",
-        required=True,
-        help="Name recorded in the generated aggregate RO-Crate",
-    )
-    parser.add_argument(
-        "--crate-description",
-        required=True,
-        help="Description recorded in the generated aggregate RO-Crate",
-    )
-    parser.add_argument(
         "--workflow-path",
         required=True,
         help="Path to the YAML workflow file used as the main entity",
     )
-    parser.add_argument(
-        "--agent-name",
-        required=True,
-        help="Workflow author and creator name from report-rocrate-agent-name",
-    )
-    parser.add_argument(
-        "--agent-orcid",
-        required=True,
-        help="Workflow author and creator ORCID URL from report-rocrate-agent-orcid",
-    )
+    parser.add_argument("--profile", type=Path, required=True, help="Exact aggregate YAML profile file")
 
     return parser.parse_args(argv)
 
@@ -950,20 +902,14 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     args = parse_args()
     benchmark_object = semantics.BenchmarkLoader(args.benchmark_file).load()
+    benchmark_object.aggregate_profile = load_aggregate_profile(args.profile)
     create_main_ro(
         args.simulation_result_path,
         benchmark_object,
         rocrate_path=args.rocrate_path,
-        software_name=args.software_name,
-        software_url=args.software_url,
-        software_version=args.software_version,
-        crate_license=args.crate_license,
-        crate_name=args.crate_name,
-        crate_description=args.crate_description,
         subcrate_paths=args.subcrate_paths,
+        aggregate_profile=benchmark_object.aggregate_profile,
         workflow_path=args.workflow_path,
-        agent_name=args.agent_name,
-        agent_orcid=args.agent_orcid,
     )
 
 

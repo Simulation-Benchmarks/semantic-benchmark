@@ -89,6 +89,20 @@ class ProcessingStep(KGNode):
     employed_tools: list[Tool] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class AggregateProfile:
+    """Software and RO-Crate metadata loaded from an aggregate profile."""
+
+    software_name: str
+    software_version: str
+    software_url: str
+    crate_license: str
+    crate_name: str
+    crate_description: str
+    agent_name: str
+    agent_orcid: str
+
+
 @dataclass
 class SemanticBenchmark(KGNode):
     version: Optional[str] = None
@@ -98,3 +112,4 @@ class SemanticBenchmark(KGNode):
     parameter_sets: list[ParameterSet] = field(default_factory=list)
     described_by: Optional[Publication] = None
     processing_steps: list[ProcessingStep] = field(default_factory=list)
+    aggregate_profile: Optional[AggregateProfile] = None
