@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from typing import Any, Mapping
 
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
-from .profiles import load_aggregate_profile
+from .profiles import build_subcrate_args, load_aggregate_profile
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 
