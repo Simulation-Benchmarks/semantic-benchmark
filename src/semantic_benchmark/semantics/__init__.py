@@ -2,6 +2,7 @@
 
 from semantic_benchmark.semantics.loader import BenchmarkLoader
 from semantic_benchmark.semantics.models import (
+    AggregateProfile,
     FieldMapping,
     IOObject,
     KGNode,
@@ -19,6 +20,7 @@ from semantic_benchmark.semantics.models import (
 )
 
 __all__ = [
+    "AggregateProfile",
     "BenchmarkLoader",
     "FieldMapping",
     "IOObject",

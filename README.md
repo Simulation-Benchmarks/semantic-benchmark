@@ -68,10 +68,41 @@ from completed runs, and `workflow_path`, a YAML file used as the main workflow.
 The CLI accepts `--workflow-path` and one `--subcrate-path` per run. Each subcrate
 is the result of a `CreateAction` whose instrument is the YAML workflow; matched
 configuration values are action inputs and extracted metrics are action results.
-Pass `agent_name` and `agent_orcid` from the reporter configuration's
-`report-rocrate-agent-name` and `report-rocrate-agent-orcid` values. They identify
-the workflow author and creator in the aggregate crate. The CLI accepts
-`--agent-name` and `--agent-orcid`.
+Aggregate crate metadata comes from a YAML profile. `--profile` takes the
+exact YAML file path. Use `--profile`
+with the CLI, or pass `aggregate_profile` to `runner.prepare_benchmark(...)`.
+The returned benchmark object exposes the loaded values in
+`benchmark.aggregate_profile`; pass that object to
+`runner.create_aggregate_rocrate(...)`.
+
+```python
+benchmark = runner.prepare_benchmark(
+    benchmark_file, benchmark_dir, unit_symbols,
+    aggregate_profile=benchmark_dir.parent / "provenance" / "profiles" / "aggregate-crate-fenics.yml",
+)
+software_version = benchmark.aggregate_profile.software_version
+```
+
+For a subcrate reporter invocation, use
+`runner.build_subcrate_args(path_to_sub_crate_yml)` to convert the YAML settings
+to Snakemake command-line arguments. The supplied path is used exactly.
+
+For example, `provenance/profiles/aggregate-crate-fenics.yml` may contain:
+
+```yaml
+software-name: "FEniCS"
+software-version: "0.9.0"
+software-url: "https://zbmath.org/software/4314"
+crate-license: "https://opensource.org/licenses/MIT"
+agent-name: "Example Author"
+agent-orcid: "https://orcid.org/0000-0000-0000-0000"
+crate-name: "Plate benchmark provenance"
+crate-description: "Provenance run of the plate benchmark"
+```
+
+The crate description is read directly from `crate-description`.
+The workflow path and the
+completed subcrate paths remain run-specific arguments.
 
 Repository-specific projects can override the packaged RoHub defaults with:
 
