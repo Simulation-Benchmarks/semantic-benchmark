@@ -29,9 +29,11 @@ ROCRATE_CONFORMS_TO = [
 ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/wfrun/process/0.6"},
     {"@id": "https://w3id.org/ro/wfrun/workflow/0.6"},
+    {"@id": "https://w3id.org/ro/wfrun/provenance/0.6"},
     {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
-AGGREGATE_VALIDATION_PROFILE = "workflow-run-crate-0.5"
+AGGREGATE_VALIDATION_PROFILE = "provenance-run-crate-0.5"
+GITHUB_ACTIONS_ID = "#github-actions"
 PROFILE_CREATIVE_WORKS = (
     {
         "@id": "https://w3id.org/ro/wfrun/process/0.6",
@@ -44,6 +46,12 @@ PROFILE_CREATIVE_WORKS = (
         "@type": "CreativeWork",
         "name": "Workflow Run Crate",
         "version": "0.6",
+    },
+    {
+        "@id": "https://w3id.org/ro/wfrun/provenance/0.6",
+        "@type": "CreativeWork",
+        "name": "Provenance Run Crate",
+        "version": "0.6"
     },
     {
         "@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1",
@@ -589,21 +597,22 @@ def _add_run_actions(
     configuration_entries: list[ConfigurationEntry],
     run_results_by_name: dict[str, list[dict[str, str]]],
     workflow_id: str,
-) -> None:
+) -> list[str]:
     """Add run action nodes connecting runs, configurations, and results.
 
     Args:
         crate: Aggregate RO-Crate being built.
-        subfolders: Simulation run folders.
-        object_ids_by_run: Mapping from run folder name to subcrate object id.
+        subcrates: Reporter RO-Crate files for the simulation runs.
+        input_path: Parent directory of the run folders.
         processing_steps: Benchmark processing steps to represent as actions.
         configuration_entries: Generated configuration metadata entries.
         run_results_by_name: Mapping from run folder name to result references.
-        software_id: JSON-LD id of the software application instrument.
+        workflow_id: JSON-LD id of the workflow instrument.
 
     Returns:
-        None. The function mutates ``crate`` by adding ``CreateAction`` nodes.
+        IDs of the benchmark run ``CreateAction`` nodes added to ``crate``.
     """
+    action_ids = []
     for subcrate in subcrates:
         run_folder = subcrate.parent
         run_name = run_folder.name
@@ -631,6 +640,8 @@ def _add_run_actions(
         action_id = run_action["@id"]
         crate.add_jsonld(run_action)
         crate.root_dataset.append_to("mentions", {"@id": action_id})
+        action_ids.append(action_id)
+    return action_ids
 
 
 def _configure_crate_metadata(
@@ -698,6 +709,57 @@ def _add_software_node(
     )
 
 
+def _add_tool_run_action(crate: ROCrate, software_id: str, software_name: str) -> str:
+    """Record a tool execution and link it to its software application."""
+    action_id = _new_jsonld_id()
+    crate.add_jsonld(
+        {
+            "@id": action_id,
+            "@type": "CreateAction",
+            "name": f"Run of {software_name}",
+            "instrument": {"@id": software_id},
+        }
+    )
+    crate.root_dataset.append_to("mentions", {"@id": action_id})
+    return action_id
+
+
+def _add_tool_control_action(
+    crate: ROCrate, tool_action_id: str, step_id: str, software_name: str
+) -> str:
+    """Connect the orchestrated step to its tool execution."""
+    action_id = _new_jsonld_id()
+    crate.add_jsonld(
+        {
+            "@id": action_id,
+            "@type": "ControlAction",
+            "name": f"{software_name} tool step",
+            "instrument": {"@id": step_id},
+            "object": {"@id": tool_action_id},
+        }
+    )
+    return action_id
+
+
+def _add_workflow_engine_run(
+    crate: ROCrate, run_action_ids: list[str], control_action_id: str
+) -> None:
+    """Represent GitHub Actions and its orchestration of the workflow run."""
+    _add_software_node(crate, GITHUB_ACTIONS_ID, "GitHub Actions")
+    action_id = _new_jsonld_id()
+    crate.add_jsonld(
+        {
+            "@id": action_id,
+            "@type": "OrganizeAction",
+            "name": "Run of GitHub Actions",
+            "instrument": {"@id": GITHUB_ACTIONS_ID},
+            "object": {"@id": control_action_id},
+            "result": [{"@id": action_id} for action_id in run_action_ids],
+        }
+    )
+    crate.root_dataset.append_to("mentions", {"@id": action_id})
+
+
 def _add_yaml_language_node(crate: ROCrate) -> dict[str, str]:
     """Add the YAML language node and return its JSON-LD reference."""
     yaml_id = "https://www.wikidata.org/entity/Q281876"
@@ -717,29 +779,44 @@ def _add_workflow_node(
     crate: ROCrate,
     workflow_path: Path,
     software_id: str,
+    software_name: str,
     agent_name: str,
     agent_orcid: str,
-) -> None:
+) -> str:
     """Add the main workflow file to the aggregate crate.
 
     Args:
         crate: Aggregate RO-Crate being built.
         workflow_path: Location of the workflow file to add.
         software_id: JSON-LD id of the software application requirement.
+        software_name: Human-readable name of the tool used by the workflow.
         agent_name: Name of the workflow author and creator.
         agent_orcid: ORCID URL identifying the author and creator.
 
     Returns:
-        None. The function mutates ``crate``.
+        ID of the HowToStep added to ``crate``.
     """
     workflow = crate.add(ComputationalWorkflow(crate, source=str(workflow_path)))
+    workflow.type.append("HowTo")
     workflow["encodingFormat"] = "application/yaml"
     workflow["softwareRequirements"] = {"@id": software_id}
+    workflow["hasPart"] = [{"@id": software_id}]
+    step_id = f"{workflow.id}#tool-step"
+    workflow["step"] = {"@id": step_id}
+    crate.add_jsonld(
+        {
+            "@id": step_id,
+            "@type": "HowToStep",
+            "name": f"{software_name} tool step",
+            "workExample": {"@id": software_id},
+        }
+    )
     workflow["programmingLanguage"] = _add_yaml_language_node(crate)
     person = {"@id": agent_orcid}
     workflow["author"] = person
     workflow["creator"] = person
     crate.add_jsonld({"@id": agent_orcid, "@type": "Person", "name": agent_name})
+    return step_id
 
 
 def create_main_ro(
@@ -818,7 +895,7 @@ def create_main_ro(
         workflow_id = workflow_file.name
         software_id = software_url or _new_jsonld_id()
 
-        _add_run_actions(
+        run_action_ids = _add_run_actions(
             crate=crate,
             subcrates=subcrates,
             input_path=input_path,
@@ -836,7 +913,19 @@ def create_main_ro(
         )
         _add_software_node(crate, software_id, software_name, software_version)
         _add_profile_creative_works(crate)
-        _add_workflow_node(crate, workflow_file, software_id, metadata.agent_name, metadata.agent_orcid)
+        step_id = _add_workflow_node(
+            crate,
+            workflow_file,
+            software_id,
+            software_name,
+            metadata.agent_name,
+            metadata.agent_orcid,
+        )
+        tool_action_id = _add_tool_run_action(crate, software_id, software_name)
+        control_action_id = _add_tool_control_action(
+            crate, tool_action_id, step_id, software_name
+        )
+        _add_workflow_engine_run(crate, run_action_ids, control_action_id)
 
         crate.write_zip(rocrate_path)
 
