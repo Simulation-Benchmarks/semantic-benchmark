@@ -87,6 +87,48 @@ def _new_jsonld_id() -> str:
     return f"#{uuid.uuid4()}"
 
 
+def add_tool_parameter(
+    benchmark_object: semantics.SemanticBenchmark,
+    name: str,
+    additional_type: str,
+    default_value: str,
+    description: str | None = None,
+) -> None:
+    """Register a tool input before creating the aggregate RO-Crate.
+
+    Each call adds one FormalParameter to the software application's ``input``.
+    ``additional_type`` may be a type name or URL; it is stored as a string.
+    """
+    for field_name, value in (
+        ("name", name),
+        ("additional_type", additional_type),
+        ("default_value", default_value),
+    ):
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{field_name} must be a non-empty string")
+    if description is not None and not isinstance(description, str):
+        raise ValueError("description must be a string")
+    parameter = {
+        "name": name,
+        "additionalType": additional_type,
+        "defaultValue": default_value,
+    }
+    if description is not None:
+        parameter["description"] = description
+    benchmark_object.tool_parameters.append(parameter)
+
+
+def _add_tool_parameters(
+    crate: ROCrate, software_id: str, parameters: list[dict[str, str]]
+) -> None:
+    """Add registered FormalParameters and link them to the tool software."""
+    software = crate.get(software_id)
+    for parameter in parameters:
+        parameter_id = _new_jsonld_id()
+        crate.add_jsonld({"@id": parameter_id, "@type": "FormalParameter", **parameter})
+        software.append_to("input", {"@id": parameter_id})
+
+
 def _is_reporter_subcrate(path: Path) -> bool:
     """Identify a metadata4ing RO-Crate without extracting its contents."""
     try:
@@ -912,6 +954,7 @@ def create_main_ro(
             crate_description=metadata.crate_description,
         )
         _add_software_node(crate, software_id, software_name, software_version)
+        _add_tool_parameters(crate, software_id, benchmark_object.tool_parameters)
         _add_profile_creative_works(crate)
         step_id = _add_workflow_node(
             crate,

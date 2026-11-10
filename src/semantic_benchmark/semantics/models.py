@@ -113,3 +113,4 @@ class SemanticBenchmark(KGNode):
     described_by: Optional[Publication] = None
     processing_steps: list[ProcessingStep] = field(default_factory=list)
     aggregate_profile: Optional[AggregateProfile] = None
+    tool_parameters: list[dict[str, str]] = field(default_factory=list)

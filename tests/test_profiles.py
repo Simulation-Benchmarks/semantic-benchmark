@@ -3,9 +3,15 @@
 from pathlib import Path
 
 import pytest
+from rocrate.rocrate import ROCrate
 
 from semantic_benchmark.profiles import load_aggregate_profile
-from semantic_benchmark.rocrate.create import parse_args
+from semantic_benchmark.rocrate.create import (
+    _add_software_node,
+    _add_tool_parameters,
+    add_tool_parameter,
+    parse_args,
+)
 from semantic_benchmark import runner
 from semantic_benchmark import rocrate
 from semantic_benchmark.semantics import AggregateProfile, SemanticBenchmark
@@ -44,6 +50,25 @@ def test_load_aggregate_profile(tmp_path: Path) -> None:
     assert load_aggregate_profile(renamed) == metadata
     with pytest.raises(IsADirectoryError):
         load_aggregate_profile(tmp_path)
+
+
+def test_tool_parameter_links_to_software() -> None:
+    benchmark = SemanticBenchmark(id="example")
+    add_tool_parameter(benchmark, "cell_type", "Text", "triangle", "Mesh cell type")
+    crate = ROCrate()
+    _add_software_node(crate, "#tool", "FEniCS")
+    _add_tool_parameters(crate, "#tool", benchmark.tool_parameters)
+
+    software = crate.get("#tool").as_jsonld()
+    parameter = crate.get(software["input"][0]["@id"]).as_jsonld()
+    assert parameter["@type"] == "FormalParameter"
+    assert parameter["name"] == "cell_type"
+    assert parameter["additionalType"] == "Text"
+    assert parameter["defaultValue"] == "triangle"
+    assert parameter["description"] == "Mesh cell type"
+
+    with pytest.raises(ValueError, match="name"):
+        add_tool_parameter(benchmark, "", "Text", "triangle")
 
 
 def test_missing_metadata_is_reported(tmp_path: Path) -> None:
