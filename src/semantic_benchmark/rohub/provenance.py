@@ -104,7 +104,7 @@ def build_published_runs_query() -> str:
 
 
 def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
-    """Resolve run graphs and read their software metadata."""
+    """Resolve run graphs and read software used by their create actions."""
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
@@ -114,13 +114,36 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
       VALUES ?run_id {{ {values} }}
       GRAPH ?graph {{
         ?run_id a schema:Dataset .
-        OPTIONAL {{
-          ?software_url a schema:SoftwareApplication .
-          OPTIONAL {{ ?software_url foaf:name ?software_name . }}
-          OPTIONAL {{ ?software_url schema:version ?software_version . }}
-        }}
+        ?run_id schema:mentions ?action .
+        ?action a schema:CreateAction ; schema:instrument ?software_url .
+        ?software_url a schema:SoftwareApplication .
+        OPTIONAL {{ ?software_url foaf:name ?software_name . }}
+        OPTIONAL {{ ?software_url schema:version ?software_version . }}
       }}
     }}
+    """
+
+
+def build_tool_parameters_query(run_id: str, graph: str) -> str:
+    """List a published run's software input FormalParameters."""
+    return f"""
+    PREFIX schema: <{SCHEMA_HTTP}>
+    PREFIX schema_https: <{SCHEMA}>
+    PREFIX foaf: <{FOAF}>
+    SELECT DISTINCT ?name ?additional_type ?default_value ?description
+    WHERE {{
+      GRAPH <{graph}> {{
+        <{run_id}> a schema:Dataset .
+        ?software a schema:SoftwareApplication ;
+            (schema:input|schema_https:input) ?parameter .
+        ?parameter a <{FORMAL_PARAMETER}> ;
+            (foaf:name|schema:name|schema_https:name) ?name ;
+            (schema:additionalType|schema_https:additionalType) ?additional_type ;
+            (schema:defaultValue|schema_https:defaultValue) ?default_value .
+        OPTIONAL {{ ?parameter (schema:description|schema_https:description) ?description . }}
+      }}
+    }}
+    ORDER BY ?name
     """
 
 
