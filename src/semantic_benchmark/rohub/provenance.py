@@ -33,6 +33,9 @@ M4I = "http://w3id.org/nfdi4ing/metadata4ing#"
 DCTERMS = "http://purl.org/dc/terms/"
 FOAF = "http://xmlns.com/foaf/0.1/"
 FORMAL_PARAMETER = "https://bioschemas.org/FormalParameter"
+COMPUTATIONAL_WORKFLOW = "https://bioschemas.org/ComputationalWorkflow"
+WORKFLOW_TERMS = "https://bioschemas.org/ComputationalWorkflow#"
+PROVENANCE_RUN_PROFILE = "https://w3id.org/ro/wfrun/provenance/0.6"
 
 ANNOTATION_PREDICATE = f"{M4I}investigates"
 BENCHMARK_BASE_URL = "https://github.com/Simulation-Benchmarks"
@@ -109,11 +112,16 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
     PREFIX foaf: <{FOAF}>
-    SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version ?source
+    PREFIX dcterms: <{DCTERMS}>
+    SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version ?source ?profile
     WHERE {{
       VALUES ?run_id {{ {values} }}
       GRAPH ?graph {{
         ?run_id a schema:Dataset .
+        OPTIONAL {{
+          ?run_id dcterms:conformsTo <{PROVENANCE_RUN_PROFILE}> .
+          BIND("provenance" AS ?profile)
+        }}
         {{
           ?run_id schema:mentions ?action .
           ?action a schema:CreateAction ; schema:instrument ?software_url .
@@ -229,6 +237,7 @@ def _select_variables(names: Sequence[str], var_map: dict[str, str]) -> str:
 def _create_action_links(include_tool: bool = False) -> list[str]:
     """Build the common CreateAction graph pattern."""
     links = [
+        "?run a schema:Dataset .",
         "?runAction a schema:CreateAction .",
         "?runAction schema:object ?configuration .",
         "?configuration a schema:PropertyValue .",
@@ -237,6 +246,8 @@ def _create_action_links(include_tool: bool = False) -> list[str]:
     if include_tool:
         links.extend(
             [
+                "?run schema:mentions ?toolAction .",
+                "?toolAction a schema:CreateAction ; schema:instrument ?software .",
                 "?software a schema:SoftwareApplication .",
                 f"?software {FOAF_NAME} ?tool_name .",
             ]
@@ -278,7 +289,7 @@ def _parameter_block(
     name_predicate: str = FOAF_NAME,
 ) -> str:
     """Build a graph pattern that extracts one configuration parameter."""
-    return _value_block(
+    value_block = _value_block(
         "?configuration",
         "schema:exampleOfWork",
         "param",
@@ -286,6 +297,7 @@ def _parameter_block(
         var_map,
         name_predicate,
     )
+    return f"{value_block}\nGRAPH ?workflow_graph {{ ?workflow workflow:input ?param_{var_map[name]} . }}"
 
 
 def _metric_block(
@@ -302,6 +314,9 @@ def _metric_block(
         var_map,
         name_predicate,
     )
+    value_block += f"\n?metric_{var_map[name]} schema:exampleOfWork ?metric_definition_{var_map[name]} ."
+    value_block += f"\n?metric_definition_{var_map[name]} a <{FORMAL_PARAMETER}> ."
+    value_block += f"\nGRAPH ?workflow_graph {{ ?workflow workflow:output ?metric_definition_{var_map[name]} . }}"
     indented_block = "\n".join(f"  {line}" for line in value_block.splitlines())
     return f"OPTIONAL {{\n{indented_block}\n}}"
 
@@ -348,10 +363,14 @@ def _format_query(
     select_vars: str,
     where_block: str,
     order_clause: str = "",
+    *,
+    include_workflow: bool = False,
 ) -> str:
     """Format a complete SPARQL query."""
+    workflow_prefix = f"PREFIX workflow: <{WORKFLOW_TERMS}>" if include_workflow else ""
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
+    {workflow_prefix}
 
     SELECT {select_vars}
     WHERE {{
@@ -373,6 +392,8 @@ def build_dynamic_query(
 
     inner_query = _join_blocks(
         "\n".join(_create_action_links(include_tool=True)),
+        f"GRAPH ?workflow_graph {{ ?workflow a <{COMPUTATIONAL_WORKFLOW}> . }}",
+        'FILTER(STRSTARTS(STR(?workflow_graph), CONCAT(STR(?run), "/")))',
         "\n".join(
             _parameter_block(name, var_map) for name in parameters
         ),
@@ -384,6 +405,41 @@ def build_dynamic_query(
         select_vars,
         _named_graph_values_block(named_graphs, inner_query),
         _order_clause(order_name, var_map),
+        include_workflow=True,
+    )
+
+
+def build_legacy_dynamic_query(
+    parameters: Sequence[str],
+    metrics: Sequence[str],
+    named_graphs: Sequence[str],
+) -> str:
+    """Read run values from crates without workflow FormalParameter links."""
+    var_map = _variable_map([*parameters, *metrics])
+    metric_blocks = [
+        "OPTIONAL {\n" + _value_block(
+            "?runAction", "schema:result", "metric", name, var_map, FOAF_NAME
+        ) + "\n}"
+        for name in metrics
+    ]
+    inner_query = _join_blocks(
+        "?runAction a schema:CreateAction ; schema:object ?configuration .",
+        "?configuration a schema:PropertyValue .",
+        "?software a schema:SoftwareApplication .",
+        f"?software {FOAF_NAME} ?tool_name .",
+        "\n".join(
+            _value_block(
+                "?configuration", "schema:exampleOfWork", "param", name,
+                var_map, FOAF_NAME,
+            )
+            for name in parameters
+        ),
+        "\n".join(metric_blocks),
+    )
+    return _format_query(
+        " ".join(["?tool_name", _select_variables([*parameters, *metrics], var_map)]),
+        _named_graph_values_block(named_graphs, inner_query),
+        _order_clause(parameters[0] if parameters else None, var_map),
     )
 
 
@@ -395,6 +451,7 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
             schema:object ?configuration .
         ?configuration a schema:PropertyValue ;
             schema:exampleOfWork ?field .
+        GRAPH ?workflow_graph {{ ?workflow workflow:input ?field . }}
         ?field a <{FORMAL_PARAMETER}> ;
             {FOAF_NAME} ?field_name .
         BIND("parameter" AS ?field_type)
@@ -404,11 +461,44 @@ def build_available_fields_query(named_graphs: Sequence[str]) -> str:
         ?runAction a schema:CreateAction ;
             schema:result ?field .
         ?field a schema:PropertyValue ;
+            schema:exampleOfWork ?metric_definition ;
             {FOAF_NAME} ?field_name .
+        ?metric_definition a <{FORMAL_PARAMETER}> .
+        GRAPH ?workflow_graph {{ ?workflow workflow:output ?metric_definition . }}
         BIND("metric" AS ?field_type)
     }}
     """.strip()
 
+    return _format_query(
+        "DISTINCT ?field_type ?field_name",
+        _named_graph_values_block(
+            named_graphs,
+            f"""
+            ?run a schema:Dataset .
+            GRAPH ?workflow_graph {{ ?workflow a <{COMPUTATIONAL_WORKFLOW}> . }}
+            FILTER(STRSTARTS(STR(?workflow_graph), CONCAT(STR(?run), "/")))
+            {inner_query}
+            """,
+        ),
+        "\nORDER BY ?field_type ?field_name",
+        include_workflow=True,
+    )
+
+
+def build_legacy_available_fields_query(named_graphs: Sequence[str]) -> str:
+    """Discover fields from crates without workflow FormalParameter links."""
+    inner_query = f"""
+    {{
+        ?runAction a schema:CreateAction ; schema:object ?configuration .
+        ?configuration a schema:PropertyValue ; schema:exampleOfWork ?field .
+        ?field a <{FORMAL_PARAMETER}> ; {FOAF_NAME} ?field_name .
+        BIND("parameter" AS ?field_type)
+    }} UNION {{
+        ?runAction a schema:CreateAction ; schema:result ?field .
+        ?field a schema:PropertyValue ; {FOAF_NAME} ?field_name .
+        BIND("metric" AS ?field_type)
+    }}
+    """.strip()
     return _format_query(
         "DISTINCT ?field_type ?field_name",
         _named_graph_values_block(named_graphs, inner_query),
@@ -557,12 +647,15 @@ def query_metric_data_from_named_graphs(
 
 def discover_benchmark_fields(
     named_graphs: Sequence[str],
+    *,
+    legacy: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Return all parameter and metric names present in named graphs."""
     if not named_graphs:
         raise RuntimeError("No RoHub named graphs provided.")
 
-    result = query_sparql(build_available_fields_query(named_graphs))
+    builder = build_legacy_available_fields_query if legacy else build_available_fields_query
+    result = query_sparql(builder(named_graphs))
     if result.empty:
         return [], []
 

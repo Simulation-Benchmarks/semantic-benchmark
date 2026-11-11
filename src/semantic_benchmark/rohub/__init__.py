@@ -20,6 +20,8 @@ _PROVENANCE_EXPORTS = {
     "build_tool_parameters_query",
     "build_runs_with_tool_parameters_query",
     "build_available_fields_query",
+    "build_legacy_available_fields_query",
+    "build_legacy_dynamic_query",
     "sanitize_variable_name",
     "configure_rohub",
     "login_to_rohub",
