@@ -307,6 +307,7 @@ def _add_configuration_node(
 def _add_configuration_nodes(
     crate: ROCrate,
     benchmark_object: semantics.SemanticBenchmark,
+    workflow_inputs: dict[str, dict[str, str]],
 ) -> list[ConfigurationEntry]:
     """Add benchmark configuration nodes to the aggregate crate.
 
@@ -314,6 +315,7 @@ def _add_configuration_nodes(
         crate: Aggregate RO-Crate being built.
         benchmark_object: Parsed benchmark description containing processing steps
             and parameter sets.
+        workflow_inputs: Receives references to benchmark input definitions.
 
     Returns:
         Metadata entries connecting each benchmark configuration to its generated
@@ -334,9 +336,9 @@ def _add_configuration_nodes(
             formal_parameter_ids: list[dict[str, str]] = []
 
             for part in config.parts:
-                formal_parameter_ids.append(
-                    _add_formal_parameter(crate, part, formal_param_registry)
-                )
+                reference = _add_formal_parameter(crate, part, formal_param_registry)
+                formal_parameter_ids.append(reference)
+                workflow_inputs[reference["@id"]] = reference
 
             _add_configuration_node(crate, config, config_id, formal_parameter_ids)
             configuration_entries.append(
@@ -528,6 +530,7 @@ def _metric_result_payload(
     result_id: str,
     metric: semantics.NumericalVariable,
     value: Any,
+    formal_parameter: dict[str, str],
 ) -> dict[str, Any]:
     """Create a JSON-LD payload for an evaluated metric result.
 
@@ -535,6 +538,7 @@ def _metric_result_payload(
         result_id: JSON-LD id assigned to the metric result node.
         metric: Benchmark metric definition.
         value: Extracted metric value.
+        formal_parameter: Reference to the workflow output definition.
 
     Returns:
         JSON-LD dictionary ready to add to the RO-Crate.
@@ -544,6 +548,7 @@ def _metric_result_payload(
         "@type": "PropertyValue",
         "name": metric.label,
         "value": value,
+        "exampleOfWork": formal_parameter,
     }
     if metric.unit:
         payload["unitText"] = {"@id": metric.unit}
@@ -554,6 +559,7 @@ def _add_evaluates_nodes(
     crate: ROCrate,
     benchmark_object: semantics.SemanticBenchmark,
     subfolders: list[Path],
+    metric_parameters: dict[str, dict[str, str]],
 ) -> list[RunResultEntry]:
     """Add metric result nodes for all run folders.
 
@@ -561,6 +567,7 @@ def _add_evaluates_nodes(
         crate: Aggregate RO-Crate being built.
         benchmark_object: Parsed benchmark description containing evaluated metrics.
         subfolders: Simulation run folders to inspect.
+        metric_parameters: References to workflow output definitions by metric id.
 
     Returns:
         One entry per run folder with JSON-LD references to metric result nodes.
@@ -587,7 +594,11 @@ def _add_evaluates_nodes(
                 continue
 
             result_id = _new_jsonld_id()
-            crate.add_jsonld(_metric_result_payload(result_id, metric, value))
+            crate.add_jsonld(
+                _metric_result_payload(
+                    result_id, metric, value, metric_parameters[metric.id]
+                )
+            )
             run_metric_results.append({"@id": result_id})
 
         run_results.append(
@@ -824,6 +835,8 @@ def _add_workflow_node(
     software_name: str,
     agent_name: str,
     agent_orcid: str,
+    workflow_inputs: list[dict[str, str]],
+    workflow_outputs: list[dict[str, str]],
 ) -> str:
     """Add the main workflow file to the aggregate crate.
 
@@ -834,6 +847,8 @@ def _add_workflow_node(
         software_name: Human-readable name of the tool used by the workflow.
         agent_name: Name of the workflow author and creator.
         agent_orcid: ORCID URL identifying the author and creator.
+        workflow_inputs: Benchmark parameter definitions.
+        workflow_outputs: Benchmark metric definitions.
 
     Returns:
         ID of the HowToStep added to ``crate``.
@@ -843,6 +858,10 @@ def _add_workflow_node(
     workflow["encodingFormat"] = "application/yaml"
     workflow["softwareRequirements"] = {"@id": software_id}
     workflow["hasPart"] = [{"@id": software_id}]
+    if workflow_inputs:
+        workflow["input"] = workflow_inputs
+    if workflow_outputs:
+        workflow["output"] = workflow_outputs
     step_id = f"{workflow.id}#tool-step"
     workflow["step"] = {"@id": step_id}
     crate.add_jsonld(
@@ -928,9 +947,17 @@ def create_main_ro(
 
         _add_subcrates_to_main(crate, subcrates, input_path)
 
-        configuration_entries = _add_configuration_nodes(crate, benchmark_object)
+        workflow_inputs: dict[str, dict[str, str]] = {}
+        configuration_entries = _add_configuration_nodes(
+            crate, benchmark_object, workflow_inputs
+        )
+        metric_registry: dict[tuple[Any, ...], str] = {}
+        metric_parameters = {
+            metric.id: _add_formal_parameter(crate, metric, metric_registry)
+            for metric in benchmark_object.evaluates
+        }
         run_results = _add_evaluates_nodes(
-            crate, benchmark_object, extracted_subfolders
+            crate, benchmark_object, extracted_subfolders, metric_parameters
         )
         run_results_by_name = _run_results_by_name(run_results)
 
@@ -963,6 +990,8 @@ def create_main_ro(
             software_name,
             metadata.agent_name,
             metadata.agent_orcid,
+            list(workflow_inputs.values()),
+            list(metric_parameters.values()),
         )
         tool_action_id = _add_tool_run_action(crate, software_id, software_name)
         control_action_id = _add_tool_control_action(

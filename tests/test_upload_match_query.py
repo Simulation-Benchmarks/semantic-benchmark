@@ -5,7 +5,9 @@ from rdflib import ConjunctiveGraph, Literal, URIRef
 from semantic_benchmark.rohub.provenance import (
     ANNOTATION_PREDICATE,
     build_annotated_ro_uuids_query,
+    build_legacy_run_named_graphs_query,
     build_run_named_graphs_query,
+    build_runs_with_tool_parameters_query,
     build_tool_parameters_query,
 )
 
@@ -28,15 +30,18 @@ def test_previous_upload_matches_exact_benchmark_ro() -> None:
     for run, software in ((first_run, first_software), (second_run, second_software)):
         named_graph = graph.get_context(URIRef(f"{run}/graph"))
         named_graph.add((run, rdf_type, dataset_type))
-        action = URIRef(f"{run}/tool-action")
-        named_graph.add((run, URIRef("http://schema.org/mentions"), action))
-        named_graph.add((action, rdf_type, URIRef("http://schema.org/CreateAction")))
-        named_graph.add((action, URIRef("http://schema.org/instrument"), software))
+        if run == second_run:
+            action = URIRef(f"{run}/tool-action")
+            named_graph.add((run, URIRef("http://schema.org/mentions"), action))
+            named_graph.add((action, rdf_type, URIRef("http://schema.org/CreateAction")))
+            named_graph.add((action, URIRef("http://schema.org/instrument"), software))
         named_graph.add((software, rdf_type, software_type))
         named_graph.add((software, version_predicate, Literal("2.0")))
         github_actions = URIRef(f"{run}/github-actions")
         named_graph.add((github_actions, rdf_type, software_type))
         named_graph.add((github_actions, URIRef("http://xmlns.com/foaf/0.1/name"), Literal("GitHub Actions")))
+        if run == second_run:
+            named_graph.add((github_actions, version_predicate, Literal("1.0")))
 
     query = build_annotated_ro_uuids_query(
         benchmark_name="example",
@@ -48,10 +53,18 @@ def test_previous_upload_matches_exact_benchmark_ro() -> None:
 
     assert [row.subject for row in graph.query(query)] == [second_run]
 
-    metadata_rows = list(graph.query(build_run_named_graphs_query([str(second_run)])))
+    metadata_rows = [
+        row
+        for row in graph.query(build_run_named_graphs_query([str(second_run)]))
+        if str(row.source) == "linked"
+    ]
     assert len(metadata_rows) == 1
     assert metadata_rows[0].software_url == second_software
     assert str(metadata_rows[0].software_version) == "2.0"
+    legacy_rows = list(graph.query(build_legacy_run_named_graphs_query([str(first_run)])))
+    assert len(legacy_rows) == 1
+    assert legacy_rows[0].software_url == first_software
+    assert list(graph.query(build_runs_with_tool_parameters_query([str(second_run)]))) == []
 
 
 def test_tool_parameters_are_read_from_the_run_graph() -> None:
@@ -64,11 +77,12 @@ def test_tool_parameters_are_read_from_the_run_graph() -> None:
     rdf_type = URIRef("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
     schema = "http://schema.org/"
     named.add((run, rdf_type, URIRef(f"{schema}Dataset")))
-    workflow = URIRef("https://example.org/workflow")
-    named.add((run, URIRef(f"{schema}mainEntity"), workflow))
-    named.add((workflow, URIRef(f"{schema}softwareRequirements"), software))
+    action = URIRef("https://example.org/tool-action")
+    named.add((run, URIRef(f"{schema}mentions"), action))
+    named.add((action, rdf_type, URIRef(f"{schema}CreateAction")))
+    named.add((action, URIRef(f"{schema}instrument"), software))
     named.add((software, rdf_type, URIRef(f"{schema}SoftwareApplication")))
-    named.add((software, URIRef(f"{schema}input"), parameter))
+    named.add((software, URIRef("https://bioschemas.org/ComputationalWorkflow#input"), parameter))
     named.add((parameter, rdf_type, URIRef("https://bioschemas.org/FormalParameter")))
     named.add((parameter, URIRef("http://xmlns.com/foaf/0.1/name"), Literal("Grid.Cells0")))
     named.add((parameter, URIRef(f"{schema}additionalType"), Literal("Text")))
@@ -79,3 +93,5 @@ def test_tool_parameters_are_read_from_the_run_graph() -> None:
     assert str(rows[0].name) == "Grid.Cells0"
     assert str(rows[0].default_value) == "40 40"
     assert rows[0].description is None
+    available = list(graph.query(build_runs_with_tool_parameters_query([str(run)])))
+    assert [(row.run_id, row.graph) for row in available] == [(run, graph_id)]

@@ -1,20 +1,34 @@
 """Profile inputs for aggregate RO-Crate creation."""
 
+import json
 from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 from rocrate.rocrate import ROCrate
 
 from semantic_benchmark.profiles import load_aggregate_profile
 from semantic_benchmark.rocrate.create import (
+    _add_configuration_nodes,
+    _add_evaluates_nodes,
+    _add_formal_parameter,
     _add_software_node,
     _add_tool_parameters,
+    _add_workflow_node,
     add_tool_parameter,
     parse_args,
 )
 from semantic_benchmark import runner
 from semantic_benchmark import rocrate
-from semantic_benchmark.semantics import AggregateProfile, SemanticBenchmark
+from semantic_benchmark.semantics import (
+    AggregateProfile,
+    FieldMapping,
+    NumericalParameter,
+    NumericalVariable,
+    ParameterSet,
+    ProcessingStep,
+    SemanticBenchmark,
+)
 
 
 def profile_file(tmp_path: Path) -> Path:
@@ -69,6 +83,65 @@ def test_tool_parameter_links_to_software() -> None:
 
     with pytest.raises(ValueError, match="name"):
         add_tool_parameter(benchmark, "", "Text", "triangle")
+
+
+def test_workflow_defines_benchmark_inputs_and_outputs(tmp_path: Path) -> None:
+    run_folder = tmp_path / "run-1"
+    run_folder.mkdir()
+    (run_folder / "results.json").write_text('{"metrics": {"error": 0.25}}')
+    workflow_file = tmp_path / "workflow.yml"
+    workflow_file.write_text("name: example\n")
+    parameter = NumericalParameter(id="radius", label="Radius", numerical_value=1.0)
+    metric = NumericalVariable(
+        id="error",
+        label="Error",
+        field_mapping=FieldMapping(
+            field_id="error", file_object_label="results.json", json_path="/metrics/error"
+        ),
+    )
+    benchmark = SemanticBenchmark(
+        id="example",
+        processing_steps=[
+            ProcessingStep(
+                id="step", configurations=[ParameterSet(id="config", parts=[parameter])]
+            )
+        ],
+        evaluates=[metric],
+    )
+    add_tool_parameter(benchmark, "Grid.Cells0", "Integer", "40")
+    crate = ROCrate()
+    workflow_inputs: dict[str, dict[str, str]] = {}
+    _add_configuration_nodes(crate, benchmark, workflow_inputs)
+    output = _add_formal_parameter(crate, metric, {})
+    results = _add_evaluates_nodes(crate, benchmark, [run_folder], {metric.id: output})
+    _add_software_node(crate, "#tool", "Example tool")
+    _add_tool_parameters(crate, "#tool", benchmark.tool_parameters)
+    _add_workflow_node(
+        crate, workflow_file, "#tool", "Example tool", "Example Author",
+        "https://orcid.org/0000-0000-0000-0000", list(workflow_inputs.values()), [output],
+    )
+
+    workflow = crate.get(workflow_file.name).as_jsonld()
+    software = crate.get("#tool").as_jsonld()
+    result = crate.get(results[0]["result_ids"][0]["@id"]).as_jsonld()
+    assert {"File", "SoftwareSourceCode", "ComputationalWorkflow", "HowTo"}.issubset(
+        set(workflow["@type"])
+    )
+    assert workflow["input"] == list(workflow_inputs.values())
+    assert workflow["output"] == [output]
+    assert result["exampleOfWork"] == output
+    assert len(software["input"]) == 1
+    assert software["input"][0]["@id"] not in workflow_inputs
+
+    archive_path = tmp_path / "crate.zip"
+    crate.write_zip(archive_path)
+    with ZipFile(archive_path) as archive:
+        metadata = json.loads(archive.read("ro-crate-metadata.json"))
+    saved_workflow = next(
+        node for node in metadata["@graph"] if node["@id"] == workflow_file.name
+    )
+    assert saved_workflow["input"] == workflow["input"]
+    assert saved_workflow["output"] == workflow["output"]
 
 
 def test_missing_metadata_is_reported(tmp_path: Path) -> None:

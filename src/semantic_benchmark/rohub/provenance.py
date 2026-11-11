@@ -104,7 +104,34 @@ def build_published_runs_query() -> str:
 
 
 def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
-    """Resolve run graphs and read software used by their create actions."""
+    """Resolve run graphs using linked software or older versioned metadata."""
+    values = " ".join(f"<{run_id}>" for run_id in run_ids)
+    return f"""
+    PREFIX schema: <{SCHEMA_HTTP}>
+    PREFIX foaf: <{FOAF}>
+    SELECT DISTINCT ?run_id ?graph ?software_url ?software_name ?software_version ?source
+    WHERE {{
+      VALUES ?run_id {{ {values} }}
+      GRAPH ?graph {{
+        ?run_id a schema:Dataset .
+        {{
+          ?run_id schema:mentions ?action .
+          ?action a schema:CreateAction ; schema:instrument ?software_url .
+          ?software_url a schema:SoftwareApplication .
+          BIND("linked" AS ?source)
+        }} UNION {{
+          ?software_url a schema:SoftwareApplication ; schema:version ?version .
+          BIND("versioned" AS ?source)
+        }}
+        OPTIONAL {{ ?software_url foaf:name ?software_name . }}
+        OPTIONAL {{ ?software_url schema:version ?software_version . }}
+      }}
+    }}
+    """
+
+
+def build_legacy_run_named_graphs_query(run_ids: Sequence[str]) -> str:
+    """Resolve older run graphs that have no action-to-software link."""
     values = " ".join(f"<{run_id}>" for run_id in run_ids)
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
@@ -114,11 +141,10 @@ def build_run_named_graphs_query(run_ids: Sequence[str]) -> str:
       VALUES ?run_id {{ {values} }}
       GRAPH ?graph {{
         ?run_id a schema:Dataset .
-        ?run_id schema:mentions ?action .
-        ?action a schema:CreateAction ; schema:instrument ?software_url .
-        ?software_url a schema:SoftwareApplication .
-        OPTIONAL {{ ?software_url foaf:name ?software_name . }}
-        OPTIONAL {{ ?software_url schema:version ?software_version . }}
+        OPTIONAL {{
+          ?software_url a schema:SoftwareApplication ; schema:version ?software_version .
+          OPTIONAL {{ ?software_url foaf:name ?software_name . }}
+        }}
       }}
     }}
     """
@@ -128,22 +154,47 @@ def build_tool_parameters_query(run_id: str, graph: str) -> str:
     """List a published run's software input FormalParameters."""
     return f"""
     PREFIX schema: <{SCHEMA_HTTP}>
-    PREFIX schema_https: <{SCHEMA}>
+    PREFIX workflow: <https://bioschemas.org/ComputationalWorkflow#>
     PREFIX foaf: <{FOAF}>
     SELECT DISTINCT ?name ?additional_type ?default_value ?description
     WHERE {{
       GRAPH <{graph}> {{
         <{run_id}> a schema:Dataset .
+        <{run_id}> schema:mentions ?action .
+        ?action a schema:CreateAction ; schema:instrument ?software .
         ?software a schema:SoftwareApplication ;
-            (schema:input|schema_https:input) ?parameter .
+            workflow:input ?parameter .
         ?parameter a <{FORMAL_PARAMETER}> ;
-            (foaf:name|schema:name|schema_https:name) ?name ;
-            (schema:additionalType|schema_https:additionalType) ?additional_type ;
-            (schema:defaultValue|schema_https:defaultValue) ?default_value .
-        OPTIONAL {{ ?parameter (schema:description|schema_https:description) ?description . }}
+            foaf:name ?name ;
+            schema:additionalType ?additional_type ;
+            schema:defaultValue ?default_value .
+        OPTIONAL {{ ?parameter schema:description ?description . }}
       }}
     }}
     ORDER BY ?name
+    """
+
+
+def build_runs_with_tool_parameters_query(run_ids: Sequence[str]) -> str:
+    """Find runs whose linked software has displayable tool inputs."""
+    values = " ".join(f"<{run_id}>" for run_id in run_ids)
+    return f"""
+    PREFIX schema: <{SCHEMA_HTTP}>
+    PREFIX workflow: <https://bioschemas.org/ComputationalWorkflow#>
+    PREFIX foaf: <{FOAF}>
+    SELECT DISTINCT ?run_id ?graph
+    WHERE {{
+      VALUES ?run_id {{ {values} }}
+      GRAPH ?graph {{
+        ?run_id a schema:Dataset ; schema:mentions ?action .
+        ?action a schema:CreateAction ; schema:instrument ?software .
+        ?software a schema:SoftwareApplication ; workflow:input ?parameter .
+        ?parameter a <{FORMAL_PARAMETER}> ;
+            foaf:name ?name ;
+            schema:additionalType ?additional_type ;
+            schema:defaultValue ?default_value .
+      }}
+    }}
     """
 
 
