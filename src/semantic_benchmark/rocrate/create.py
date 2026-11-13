@@ -1,4 +1,4 @@
-"""Create an aggregate RO-Crate from per-configuration benchmark provenance crates."""
+"""Create a main RO-Crate from per-configuration benchmark provenance crates."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from rocrate.model.computationalworkflow import ComputationalWorkflow
 from rocrate.model.softwareapplication import SoftwareApplication
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
-from semantic_benchmark.semantics.models import AggregateProfile
-from semantic_benchmark.profiles import load_aggregate_profile
+from semantic_benchmark.semantics.models import MainProfile
+from semantic_benchmark.profiles import load_main_profile
 from semantic_benchmark.rocrate.validation import validate_rocrate
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
@@ -31,7 +31,7 @@ ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/ro/wfrun/workflow/0.6"},
     {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
-AGGREGATE_VALIDATION_PROFILE = "workflow-run-crate-0.5"
+MAIN_VALIDATION_PROFILE = "workflow-run-crate-0.5"
 PROFILE_CREATIVE_WORKS = (
     {
         "@id": "https://w3id.org/ro/wfrun/process/0.6",
@@ -125,10 +125,10 @@ def _unzip_subcrates_for_reading(
 def _add_subcrates_to_main(
     crate: ROCrate, subcrates: list[Path], input_path: Path
 ) -> None:
-    """Add subcrate zip files as data files in the aggregate crate.
+    """Add subcrate zip files as data files in the main crate.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         subcrates: Zip files to add to the crate.
         input_path: Root simulation result directory used for relative crate paths.
 
@@ -209,7 +209,7 @@ def _add_formal_parameter(
     """Add a FormalParameter node once and return its id reference.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         part: Benchmark parameter or variable entry to add.
         formal_param_registry: Registry mapping parameter keys to existing ids.
 
@@ -236,7 +236,7 @@ def _add_configuration_node(
     """Add one benchmark configuration as a PropertyValue node.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         config: Benchmark configuration to serialize.
         config_id: JSON-LD id assigned to this configuration node.
         formal_parameter_ids: FormalParameter references included in the configuration.
@@ -258,10 +258,10 @@ def _add_configuration_nodes(
     crate: ROCrate,
     benchmark_object: semantics.SemanticBenchmark,
 ) -> list[ConfigurationEntry]:
-    """Add benchmark configuration nodes to the aggregate crate.
+    """Add benchmark configuration nodes to the main crate.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         benchmark_object: Parsed benchmark description containing processing steps
             and parameter sets.
 
@@ -508,7 +508,7 @@ def _add_evaluates_nodes(
     """Add metric result nodes for all run folders.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         benchmark_object: Parsed benchmark description containing evaluated metrics.
         subfolders: Simulation run folders to inspect.
 
@@ -593,7 +593,7 @@ def _add_run_actions(
     """Add run action nodes connecting runs, configurations, and results.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         subfolders: Simulation run folders.
         object_ids_by_run: Mapping from run folder name to subcrate object id.
         processing_steps: Benchmark processing steps to represent as actions.
@@ -643,11 +643,11 @@ def _configure_crate_metadata(
     """Set crate-level metadata, profiles, license, and main workflow entity.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         workflow_id: JSON-LD id/path of the main workflow file.
-        crate_license: License URL stored on the aggregate RO-Crate.
-        crate_name: Human-readable name stored on the aggregate RO-Crate.
-        crate_description: Description stored on the aggregate RO-Crate.
+        crate_license: License URL stored on the main RO-Crate.
+        crate_name: Human-readable name stored on the main RO-Crate.
+        crate_description: Description stored on the main RO-Crate.
 
     Returns:
         None. The function mutates crate metadata and root dataset properties.
@@ -664,7 +664,7 @@ def _add_profile_creative_works(crate: ROCrate) -> None:
     """Add CreativeWork descriptions for crate profile documents.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
 
     Returns:
         None. The function mutates ``crate``.
@@ -682,7 +682,7 @@ def _add_software_node(
     """Add the software application node used as the action instrument.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         software_id: JSON-LD id assigned to the software node.
         software_name: Human-readable software name.
         software_version: Version of the software, if known.
@@ -703,7 +703,7 @@ def _add_yaml_language_node(crate: ROCrate) -> dict[str, str]:
     yaml_id = "https://www.wikidata.org/entity/Q281876"
     crate.add_jsonld(
         {
-            "@id": yaml_id,
+            "@id": "#yaml",
             "@type": "ComputerLanguage",
             "identifier": yaml_id,
             "name": "YAML",
@@ -720,10 +720,10 @@ def _add_workflow_node(
     agent_name: str,
     agent_orcid: str,
 ) -> None:
-    """Add the main workflow file to the aggregate crate.
+    """Add the main workflow file to the main crate.
 
     Args:
-        crate: Aggregate RO-Crate being built.
+        crate: Main RO-Crate being built.
         workflow_path: Location of the workflow file to add.
         software_id: JSON-LD id of the software application requirement.
         agent_name: Name of the workflow author and creator.
@@ -747,22 +747,22 @@ def create_main_ro(
     benchmark_object: semantics.SemanticBenchmark,
     rocrate_path: str,
     subcrate_paths: list[str | Path],
-    aggregate_profile: AggregateProfile,
+    main_profile: MainProfile,
     workflow_path: str | Path = "",
 ) -> None:
-    """Create and write an aggregate RO-Crate for a benchmark result directory.
+    """Create and write a main RO-Crate for a benchmark result directory.
 
     Args:
         path: Directory containing one subfolder per simulation run.
         benchmark_object: Parsed benchmark description used to create configuration
             and metric nodes.
-        rocrate_path: Output zip filename/path for the aggregate crate.
-        aggregate_profile: Loaded aggregate crate metadata.
+        rocrate_path: Output zip filename/path for the main crate.
+        main_profile: Loaded main crate metadata.
         workflow_path: Required YAML workflow file to add as the main entity.
         subcrate_paths: Exact reporter RO-Crate ZIPs to include.
 
     Returns:
-        None. The function writes the aggregate RO-Crate zip to
+        None. The function writes the main RO-Crate zip to
         ``rocrate_path``.
 
     Raises:
@@ -770,7 +770,7 @@ def create_main_ro(
         FileNotFoundError: If the workflow path is not a file.
         ValueError: If no matching subcrate zip files are found.
     """
-    metadata = aggregate_profile
+    metadata = main_profile
     software_name = metadata.software_name
     software_url = metadata.software_url
     software_version = metadata.software_version
@@ -787,7 +787,7 @@ def create_main_ro(
     if workflow_file.suffix.lower() not in {".yaml", ".yml"}:
         raise ValueError("workflow_path must be a YAML file")
     LOGGER.info(
-        "Creating aggregate RO-Crate from simulation results in %s...",
+        "Creating main RO-Crate from simulation results in %s...",
         input_path,
     )
     input_path = input_path.resolve()
@@ -846,12 +846,12 @@ def create_main_ro(
 
         validate_rocrate(
             rocrate_path=validation_dir,
-            profile=AGGREGATE_VALIDATION_PROFILE,
+            profile=MAIN_VALIDATION_PROFILE,
         )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse command-line arguments for aggregate RO-Crate creation.
+    """Parse command-line arguments for main RO-Crate creation.
 
     Returns:
         Parsed command-line arguments with benchmark file, simulation result path,
@@ -887,7 +887,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         required=True,
         help="Path to the YAML workflow file used as the main entity",
     )
-    parser.add_argument("--profile", type=Path, required=True, help="Exact aggregate YAML profile file")
+    parser.add_argument("--profile", type=Path, required=True, help="Exact main YAML profile file")
 
     return parser.parse_args(argv)
 
@@ -897,18 +897,18 @@ def main() -> None:
 
     Returns:
         None. The function loads the benchmark description and writes the
-        aggregate RO-Crate requested by the CLI arguments.
+        main RO-Crate requested by the CLI arguments.
     """
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
     args = parse_args()
     benchmark_object = semantics.BenchmarkLoader(args.benchmark_file).load()
-    benchmark_object.aggregate_profile = load_aggregate_profile(args.profile)
+    benchmark_object.main_profile = load_main_profile(args.profile)
     create_main_ro(
         args.simulation_result_path,
         benchmark_object,
         rocrate_path=args.rocrate_path,
         subcrate_paths=args.subcrate_paths,
-        aggregate_profile=benchmark_object.aggregate_profile,
+        main_profile=benchmark_object.main_profile,
         workflow_path=args.workflow_path,
     )
 

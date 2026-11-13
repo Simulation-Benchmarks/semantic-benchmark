@@ -1,19 +1,19 @@
-"""Read project profiles for aggregate benchmark RO-Crates."""
+"""Read project profiles for main benchmark RO-Crates."""
 
 from pathlib import Path
 
 import yaml
 
-from .semantics.models import AggregateProfile
+from .semantics.models import MainProfile
 
 
-def load_aggregate_profile(profile_file: str | Path) -> AggregateProfile:
+def load_main_profile(profile_file: str | Path) -> MainProfile:
     """Return a typed profile from the exact YAML file supplied."""
     path = Path(profile_file)
     with path.open(encoding="utf-8") as stream:
         profile = yaml.safe_load(stream)
     if not isinstance(profile, dict):
-        raise ValueError(f"Aggregate profile must be a YAML mapping: {path}")
+        raise ValueError(f"Main profile must be a YAML mapping: {path}")
     try:
         values = {
             "software_name": profile["software-name"],
@@ -26,10 +26,10 @@ def load_aggregate_profile(profile_file: str | Path) -> AggregateProfile:
             "agent_orcid": profile["agent-orcid"],
         }
     except (KeyError, TypeError) as exc:
-        raise ValueError(f"Invalid aggregate profile {path}: missing {exc}") from exc
+        raise ValueError(f"Invalid main profile {path}: missing {exc}") from exc
     if any(not isinstance(value, str) or not value.strip() for value in values.values()):
-        raise ValueError(f"Aggregate profile contains empty or non-text metadata: {path}")
-    return AggregateProfile(**values)
+        raise ValueError(f"Main profile contains empty or non-text metadata: {path}")
+    return MainProfile(**values)
 
 
 def build_subcrate_args(profile_file: str | Path) -> list[str]:

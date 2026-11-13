@@ -90,8 +90,8 @@ class ProcessingStep(KGNode):
 
 
 @dataclass(frozen=True)
-class AggregateProfile:
-    """Software and RO-Crate metadata loaded from an aggregate profile."""
+class MainProfile:
+    """Software and RO-Crate metadata loaded from a main profile."""
 
     software_name: str
     software_version: str
@@ -112,4 +112,4 @@ class SemanticBenchmark(KGNode):
     parameter_sets: list[ParameterSet] = field(default_factory=list)
     described_by: Optional[Publication] = None
     processing_steps: list[ProcessingStep] = field(default_factory=list)
-    aggregate_profile: Optional[AggregateProfile] = None
+    main_profile: Optional[MainProfile] = None

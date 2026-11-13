@@ -1,6 +1,6 @@
 # semantic-benchmark
 
-Reusable Python helpers for semantic benchmark descriptions, aggregate RO-Crate creation, and RoHub provenance workflows.
+Reusable Python helpers for semantic benchmark descriptions, main RO-Crate creation, and RoHub provenance workflows.
 
 ## Install
 
@@ -26,9 +26,9 @@ pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchma
 
 - `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
 - `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
-- `semantic_benchmark.rocrate`: aggregate RO-Crate creation and validation helpers.
+- `semantic_benchmark.rocrate`: main RO-Crate creation and validation helpers.
 - `semantic_benchmark.runner`: shared parameter-file, workspace, resource staging,
-  archive, logging, and aggregate RO-Crate helpers for project benchmark runners.
+  archive, logging, and main RO-Crate helpers for project benchmark runners.
 
 `semantic_benchmark.semantics` is available from the base installation.
 `semantic_benchmark.rocrate` requires the `rocrate` extra.
@@ -61,33 +61,33 @@ It accepts `--provenance_folderpath` (the RO-Crate ZIP), `--benchmark-name`,
 the SoftwareApplication node in the RO-Crate ZIP.
 
 `semantic_benchmark.rocrate.create_main_ro(...)` always validates the generated
-aggregate crate against `workflow-run-crate-0.5`. The package writes the RO-Crate
+main crate against `workflow-run-crate-0.5`. The package writes the RO-Crate
 zip, unpacks it to a validation directory, and runs `validate_rocrate(...)`.
-Aggregate creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
+Main creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
 from completed runs, and `workflow_path`, a YAML file used as the main workflow.
 The CLI accepts `--workflow-path` and one `--subcrate-path` per run. Each subcrate
 is the result of a `CreateAction` whose instrument is the YAML workflow; matched
 configuration values are action inputs and extracted metrics are action results.
-Aggregate crate metadata comes from a YAML profile. `--profile` takes the
+Main crate metadata comes from a YAML profile. `--profile` takes the
 exact YAML file path. Use `--profile`
-with the CLI, or pass `aggregate_profile` to `runner.prepare_benchmark(...)`.
+with the CLI, or pass `main_profile` to `runner.prepare_benchmark(...)`.
 The returned benchmark object exposes the loaded values in
-`benchmark.aggregate_profile`; pass that object to
-`runner.create_aggregate_rocrate(...)`.
+`benchmark.main_profile`; pass that object to
+`runner.create_main_rocrate(...)`.
 
 ```python
 benchmark = runner.prepare_benchmark(
     benchmark_file, benchmark_dir, unit_symbols,
-    aggregate_profile=benchmark_dir.parent / "provenance" / "profiles" / "aggregate-crate-fenics.yml",
+    main_profile=benchmark_dir.parent / "provenance" / "profiles" / "main-rocrate-fenics.yml",
 )
-software_version = benchmark.aggregate_profile.software_version
+software_version = benchmark.main_profile.software_version
 ```
 
 For a subcrate reporter invocation, use
 `runner.build_subcrate_args(path_to_sub_crate_yml)` to convert the YAML settings
 to Snakemake command-line arguments. The supplied path is used exactly.
 
-For example, `provenance/profiles/aggregate-crate-fenics.yml` may contain:
+For example, `provenance/profiles/main-rocrate-fenics.yml` may contain:
 
 ```yaml
 software-name: "FEniCS"

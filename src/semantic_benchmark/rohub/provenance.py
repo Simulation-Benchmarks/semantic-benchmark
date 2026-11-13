@@ -41,7 +41,7 @@ FOAF_NAME = f"<{FOAF}name>"
 
 
 def extract_software_metadata(provenance_folderpath: str) -> tuple[str, str]:
-    """Read the software identifier and version from an aggregate RO-Crate ZIP."""
+    """Read the software identifier and version from a main RO-Crate ZIP."""
     crate = ROCrate(provenance_folderpath)
     software = [
         entity

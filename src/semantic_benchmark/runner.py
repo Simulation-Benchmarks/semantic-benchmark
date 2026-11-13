@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from typing import Any, Mapping
 
 from .semantics import BenchmarkLoader, SemanticBenchmark, TextParameter
-from .profiles import build_subcrate_args, load_aggregate_profile
+from .profiles import build_subcrate_args, load_main_profile
 
 LOG_FORMAT = "%(levelname)s:%(name)s:%(message)s"
 
@@ -111,7 +111,7 @@ def prepare_benchmark(
     resource_dir: Path | None = None,
     shared_directories: Iterable[str] = (),
     strict_units: bool = False,
-    aggregate_profile: str | Path | None = None,
+    main_profile: str | Path | None = None,
 ) -> SemanticBenchmark:
     """Prepare common inputs and load a semantic benchmark run.
 
@@ -120,8 +120,8 @@ def prepare_benchmark(
     parameter files.
     Unit suffixes use only ``unit_symbols``; ``strict_units`` is retained as a
     compatibility argument and does not require mappings for every unit.
-    When ``aggregate_profile`` is given, its metadata is loaded into
-    ``benchmark.aggregate_profile`` before the benchmark is returned.
+    When ``main_profile`` is given, its metadata is loaded into
+    ``benchmark.main_profile`` before the benchmark is returned.
     """
     if archive is not None:
         extract_archive(archive, benchmark_dir)
@@ -131,8 +131,8 @@ def prepare_benchmark(
         create_shared_directory(benchmark_dir, directory_name)
 
     benchmark = BenchmarkLoader(benchmark_file).load()
-    if aggregate_profile is not None:
-        benchmark.aggregate_profile = load_aggregate_profile(aggregate_profile)
+    if main_profile is not None:
+        benchmark.main_profile = load_main_profile(main_profile)
     create_parameter_files(
         benchmark,
         benchmark_dir,
@@ -170,7 +170,7 @@ def reporter_rocrate_path(output_dir: Path) -> Path:
     return output_dir / "workflow-run.zip"
 
 
-def create_aggregate_rocrate(
+def create_main_rocrate(
     results_dir: Path,
     benchmark: SemanticBenchmark,
     rocrate_path: Path,
@@ -178,9 +178,9 @@ def create_aggregate_rocrate(
     subcrate_paths: list[str | Path],
     workflow_path: str | Path,
 ) -> None:
-    """Create an aggregate RO-Crate from the benchmark's loaded profile."""
-    if benchmark.aggregate_profile is None:
-        raise ValueError("benchmark has no aggregate profile; pass aggregate_profile to prepare_benchmark")
+    """Create a main RO-Crate from the benchmark's loaded profile."""
+    if benchmark.main_profile is None:
+        raise ValueError("benchmark has no main profile; pass main_profile to prepare_benchmark")
     # RO-Crate support is optional. Import it only when this feature is used so
     # the core runner helpers remain available without the ``rocrate`` extra.
     from . import rocrate
@@ -190,6 +190,6 @@ def create_aggregate_rocrate(
         benchmark_object=benchmark,
         rocrate_path=str(rocrate_path),
         subcrate_paths=subcrate_paths,
-        aggregate_profile=benchmark.aggregate_profile,
+        main_profile=benchmark.main_profile,
         workflow_path=workflow_path,
     )
