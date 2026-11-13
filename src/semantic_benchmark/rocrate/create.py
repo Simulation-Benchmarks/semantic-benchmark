@@ -696,14 +696,14 @@ def _add_software_node(
     crate.add(
         SoftwareApplication(crate, identifier=software_id, properties=properties)
     )
-
+    
 
 def _add_yaml_language_node(crate: ROCrate) -> dict[str, str]:
     """Add the YAML language node and return its JSON-LD reference."""
     yaml_id = "https://www.wikidata.org/entity/Q281876"
     crate.add_jsonld(
         {
-            "@id": "#yaml",
+            "@id": yaml_id,
             "@type": "ComputerLanguage",
             "identifier": yaml_id,
             "name": "YAML",
