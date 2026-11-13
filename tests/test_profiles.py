@@ -1,18 +1,18 @@
-"""Profile inputs for aggregate RO-Crate creation."""
+"""Profile inputs for main RO-Crate creation."""
 
 from pathlib import Path
 
 import pytest
 
-from semantic_benchmark.profiles import load_aggregate_profile
+from semantic_benchmark.profiles import load_main_profile
 from semantic_benchmark.rocrate.create import parse_args
 from semantic_benchmark import runner
 from semantic_benchmark import rocrate
-from semantic_benchmark.semantics import AggregateProfile, SemanticBenchmark
+from semantic_benchmark.semantics import MainProfile, SemanticBenchmark
 
 
 def profile_file(tmp_path: Path) -> Path:
-    path = tmp_path / "aggregate-crate.yml"
+    path = tmp_path / "main-crate.yml"
     path.write_text(
         'software-name: "FEniCS"\n'
         'software-version: "0.9.0"\n'
@@ -26,9 +26,9 @@ def profile_file(tmp_path: Path) -> Path:
     return path
 
 
-def test_load_aggregate_profile(tmp_path: Path) -> None:
-    metadata = load_aggregate_profile(profile_file(tmp_path))
-    assert metadata == AggregateProfile(
+def test_load_main_profile(tmp_path: Path) -> None:
+    metadata = load_main_profile(profile_file(tmp_path))
+    assert metadata == MainProfile(
         software_name="FEniCS",
         software_version="0.9.0",
         software_url="https://example.org/software",
@@ -41,16 +41,16 @@ def test_load_aggregate_profile(tmp_path: Path) -> None:
     assert metadata.crate_description == "Example run"
     renamed = tmp_path / "custom-profile.yml"
     profile_file(tmp_path).rename(renamed)
-    assert load_aggregate_profile(renamed) == metadata
+    assert load_main_profile(renamed) == metadata
     with pytest.raises(IsADirectoryError):
-        load_aggregate_profile(tmp_path)
+        load_main_profile(tmp_path)
 
 
 def test_missing_metadata_is_reported(tmp_path: Path) -> None:
     path = profile_file(tmp_path)
     path.write_text(path.read_text().replace('crate-name: "Example crate"\n', ''))
     with pytest.raises(ValueError, match="missing"):
-        load_aggregate_profile(path)
+        load_main_profile(path)
 
 
 def test_build_subcrate_args_from_exact_file(tmp_path: Path) -> None:
@@ -75,21 +75,21 @@ def test_runner_uses_profile_metadata(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(runner, "BenchmarkLoader", lambda path: type("Loader", (), {"load": lambda self: benchmark})())
     prepared = runner.prepare_benchmark(
         tmp_path / "benchmark.json", tmp_path, {},
-        aggregate_profile=profile_file(tmp_path),
+        main_profile=profile_file(tmp_path),
     )
-    assert prepared.aggregate_profile.software_version == "0.9.0"
-    runner.create_aggregate_rocrate(
+    assert prepared.main_profile.software_version == "0.9.0"
+    runner.create_main_rocrate(
         tmp_path, prepared, tmp_path / "crate.zip",
         subcrate_paths=[], workflow_path=tmp_path / "workflow.yml",
     )
-    assert captured["aggregate_profile"] is prepared.aggregate_profile
-    assert captured["aggregate_profile"].crate_description == "Example run"
+    assert captured["main_profile"] is prepared.main_profile
+    assert captured["main_profile"].crate_description == "Example run"
 
 
 def test_cli_requires_profile_and_rejects_individual_metadata(tmp_path: Path) -> None:
     command = [
         "--benchmark-file", "benchmark.json", "--simulation-result-path", "results",
-        "--subcrate-path", "run.zip", "--rocrate-path", "aggregate.zip",
+        "--subcrate-path", "run.zip", "--rocrate-path", "main.zip",
         "--workflow-path", "workflow.yml",
     ]
     with pytest.raises(SystemExit):
