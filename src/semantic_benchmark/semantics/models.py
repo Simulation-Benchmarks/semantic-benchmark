@@ -90,6 +90,14 @@ class ProcessingStep(KGNode):
 
 
 @dataclass(frozen=True)
+class ProfilePerson:
+    """A person identified in a main RO-Crate profile."""
+
+    name: str
+    orcid: str
+
+
+@dataclass(frozen=True)
 class MainProfile:
     """Software and RO-Crate metadata loaded from a main profile."""
 
@@ -99,8 +107,8 @@ class MainProfile:
     crate_license: str
     crate_name: str
     crate_description: str
-    agent_name: str
-    agent_orcid: str
+    authors: tuple[ProfilePerson, ...]
+    creator: ProfilePerson
 
 
 @dataclass

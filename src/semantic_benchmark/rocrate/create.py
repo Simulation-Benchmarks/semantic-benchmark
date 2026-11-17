@@ -16,7 +16,7 @@ from rocrate.model.computationalworkflow import ComputationalWorkflow
 from rocrate.model.softwareapplication import SoftwareApplication
 from rocrate.rocrate import ROCrate
 from semantic_benchmark import semantics
-from semantic_benchmark.semantics.models import MainProfile
+from semantic_benchmark.semantics.models import MainProfile, ProfilePerson
 from semantic_benchmark.profiles import load_main_profile
 from semantic_benchmark.rocrate.validation import validate_rocrate
 
@@ -717,8 +717,8 @@ def _add_workflow_node(
     crate: ROCrate,
     workflow_path: Path,
     software_id: str,
-    agent_name: str,
-    agent_orcid: str,
+    authors: tuple[ProfilePerson, ...],
+    creator: ProfilePerson,
 ) -> None:
     """Add the main workflow file to the main crate.
 
@@ -726,8 +726,8 @@ def _add_workflow_node(
         crate: Main RO-Crate being built.
         workflow_path: Location of the workflow file to add.
         software_id: JSON-LD id of the software application requirement.
-        agent_name: Name of the workflow author and creator.
-        agent_orcid: ORCID URL identifying the author and creator.
+        authors: Authors of the workflow.
+        creator: Person who created the workflow crate.
 
     Returns:
         None. The function mutates ``crate``.
@@ -736,10 +736,10 @@ def _add_workflow_node(
     workflow["encodingFormat"] = "application/yaml"
     workflow["softwareRequirements"] = {"@id": software_id}
     workflow["programmingLanguage"] = _add_yaml_language_node(crate)
-    person = {"@id": agent_orcid}
-    workflow["author"] = person
-    workflow["creator"] = person
-    crate.add_jsonld({"@id": agent_orcid, "@type": "Person", "name": agent_name})
+    workflow["author"] = [{"@id": person.orcid} for person in authors]
+    workflow["creator"] = {"@id": creator.orcid}
+    for person in {person.orcid: person for person in (*authors, creator)}.values():
+        crate.add_jsonld({"@id": person.orcid, "@type": "Person", "name": person.name})
 
 
 def create_main_ro(
@@ -836,7 +836,7 @@ def create_main_ro(
         )
         _add_software_node(crate, software_id, software_name, software_version)
         _add_profile_creative_works(crate)
-        _add_workflow_node(crate, workflow_file, software_id, metadata.agent_name, metadata.agent_orcid)
+        _add_workflow_node(crate, workflow_file, software_id, metadata.authors, metadata.creator)
 
         crate.write_zip(rocrate_path)
 

@@ -9,6 +9,9 @@ from semantic_benchmark.rocrate.create import parse_args
 from semantic_benchmark import runner
 from semantic_benchmark import rocrate
 from semantic_benchmark.semantics import MainProfile, SemanticBenchmark
+from semantic_benchmark.semantics.models import ProfilePerson
+from semantic_benchmark.rocrate.create import _add_workflow_node
+from rocrate.rocrate import ROCrate
 
 
 def profile_file(tmp_path: Path) -> Path:
@@ -18,8 +21,9 @@ def profile_file(tmp_path: Path) -> Path:
         'software-version: "0.9.0"\n'
         'software-url: "https://example.org/software"\n'
         'crate-license: "https://example.org/license"\n'
-        'agent-name: "Example Author"\n'
-        'agent-orcid: "https://orcid.org/0000-0000-0000-0000"\n'
+        'authors:\n  - name: "Example Author"\n    orcid: "https://orcid.org/0000-0000-0000-0000"\n'
+        '  - name: "Second Author"\n    orcid: "https://orcid.org/0000-0000-0000-0001"\n'
+        'creator:\n  name: "Mahdi Jafarkhani"\n  orcid: "https://orcid.org/0009-0008-6162-8404"\n'
         'crate-name: "Example crate"\n'
         'crate-description: "Example run"\n'
     )
@@ -35,8 +39,11 @@ def test_load_main_profile(tmp_path: Path) -> None:
         crate_license="https://example.org/license",
         crate_name="Example crate",
         crate_description="Example run",
-        agent_name="Example Author",
-        agent_orcid="https://orcid.org/0000-0000-0000-0000",
+        authors=(
+            ProfilePerson("Example Author", "https://orcid.org/0000-0000-0000-0000"),
+            ProfilePerson("Second Author", "https://orcid.org/0000-0000-0000-0001"),
+        ),
+        creator=ProfilePerson("Mahdi Jafarkhani", "https://orcid.org/0009-0008-6162-8404"),
     )
     assert metadata.crate_description == "Example run"
     renamed = tmp_path / "custom-profile.yml"
@@ -51,6 +58,36 @@ def test_missing_metadata_is_reported(tmp_path: Path) -> None:
     path.write_text(path.read_text().replace('crate-name: "Example crate"\n', ''))
     with pytest.raises(ValueError, match="missing"):
         load_main_profile(path)
+
+
+def test_people_require_valid_structure(tmp_path: Path) -> None:
+    path = profile_file(tmp_path)
+    original = path.read_text()
+    for old, new in [
+        ('authors:\n  - name: "Example Author"\n    orcid: "https://orcid.org/0000-0000-0000-0000"\n  - name: "Second Author"\n    orcid: "https://orcid.org/0000-0000-0000-0001"\n', 'authors: []\n'),
+        ('name: "Second Author"', 'name: ""'),
+        ('creator:\n  name: "Mahdi Jafarkhani"\n  orcid: "https://orcid.org/0009-0008-6162-8404"\n', 'creator: "Mahdi Jafarkhani"\n'),
+    ]:
+        path.write_text(original.replace(old, new))
+        with pytest.raises(ValueError):
+            load_main_profile(path)
+
+
+def test_workflow_has_multiple_authors_and_distinct_creator(tmp_path: Path) -> None:
+    workflow = tmp_path / "Snakefile"
+    workflow.write_text("rule all:\n    input: []\n")
+    crate = ROCrate()
+    authors = (
+        ProfilePerson("Author One", "https://orcid.org/0000-0000-0000-0000"),
+        ProfilePerson("Author Two", "https://orcid.org/0000-0000-0000-0001"),
+    )
+    creator = ProfilePerson("Creator", "https://orcid.org/0000-0000-0000-0002")
+    _add_workflow_node(crate, workflow, "https://example.org/software", authors, creator)
+    nodes = {node["@id"]: node for node in crate.metadata.generate()["@graph"]}
+    workflow_node = nodes[workflow.name]
+    assert workflow_node["author"] == [{"@id": person.orcid} for person in authors]
+    assert workflow_node["creator"] == {"@id": creator.orcid}
+    assert all(nodes[person.orcid]["name"] == person.name for person in (*authors, creator))
 
 
 def test_build_subcrate_args_from_exact_file(tmp_path: Path) -> None:

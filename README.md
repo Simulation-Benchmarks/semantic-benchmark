@@ -94,13 +94,21 @@ software-name: "FEniCS"
 software-version: "0.9.0"
 software-url: "https://zbmath.org/software/4314"
 crate-license: "https://opensource.org/licenses/MIT"
-agent-name: "Example Author"
-agent-orcid: "https://orcid.org/0000-0000-0000-0000"
+authors:
+  - name: "Example Author"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+  - name: "Second Author"
+    orcid: "https://orcid.org/0000-0000-0000-0001"
+creator:
+  name: "Mahdi Jafarkhani"
+  orcid: "https://orcid.org/0009-0008-6162-8404"
 crate-name: "Plate benchmark provenance"
 crate-description: "Provenance run of the plate benchmark"
 ```
 
 The crate description is read directly from `crate-description`.
+`authors` is a nonempty list of workflow authors; `creator` identifies the
+person who created the workflow crate. Each person needs a name and ORCID URL.
 The workflow path and the
 completed subcrate paths remain run-specific arguments.
 
