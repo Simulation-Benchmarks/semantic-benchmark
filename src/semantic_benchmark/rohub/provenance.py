@@ -72,12 +72,13 @@ def build_benchmarks_query() -> str:
         f"PREFIX dcterms: <{DCTERMS}>"
         """
 
-    SELECT DISTINCT ?benchmark_url ?benchmark_title ?research_problem_uri ?version ?repo
+    SELECT DISTINCT ?benchmark_url ?benchmark_title ?description ?research_problem_uri ?version ?repo
     WHERE {
         ?benchmark_url dcterms:title ?benchmark_title .
         ?benchmark_url m4i:investigates ?research_problem_uri .
         ?benchmark_url schema:version ?version .
         ?benchmark_url schema:codeRepository ?repo .
+        OPTIONAL { ?benchmark_url dcterms:description ?description . }
     }
     """
     )
@@ -92,12 +93,13 @@ def build_published_runs_query() -> str:
         f"PREFIX dcterms: <{DCTERMS}>"
         """
 
-    SELECT DISTINCT ?run_id ?title ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?datePublished ?version
+    SELECT DISTINCT ?run_id ?title ?description ?benchmark_url ?benchmark_title ?research_problem_uri ?branch_url ?datePublished ?version
     WHERE {
         ?run_id m4i:investigates ?benchmark_url .
         ?run_id schema_http:datePublished ?datePublished .
         ?run_id schema:codeRepository ?branch_url .
         OPTIONAL { ?run_id dcterms:title ?title . }
+        OPTIONAL { ?run_id dcterms:description ?description . }
         ?benchmark_url dcterms:title ?benchmark_title .
         ?benchmark_url m4i:investigates ?research_problem_uri .
         ?benchmark_url schema:version ?version .
