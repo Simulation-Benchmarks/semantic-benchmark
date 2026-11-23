@@ -1,4 +1,4 @@
-"""Profile inputs for aggregate RO-Crate creation."""
+"""Profile inputs for main RO-Crate creation."""
 
 import json
 from pathlib import Path
@@ -7,7 +7,7 @@ from zipfile import ZipFile
 import pytest
 from rocrate.rocrate import ROCrate
 
-from semantic_benchmark.profiles import load_aggregate_profile
+from semantic_benchmark.profiles import load_main_profile
 from semantic_benchmark.rocrate.create import (
     _add_configuration_nodes,
     _add_evaluates_nodes,
@@ -21,49 +21,54 @@ from semantic_benchmark.rocrate.create import (
 from semantic_benchmark import runner
 from semantic_benchmark import rocrate
 from semantic_benchmark.semantics import (
-    AggregateProfile,
     FieldMapping,
+    MainProfile,
     NumericalParameter,
     NumericalVariable,
     ParameterSet,
     ProcessingStep,
     SemanticBenchmark,
 )
+from semantic_benchmark.semantics.models import ProfilePerson
 
 
 def profile_file(tmp_path: Path) -> Path:
-    path = tmp_path / "aggregate-crate.yml"
+    path = tmp_path / "main-crate.yml"
     path.write_text(
         'software-name: "FEniCS"\n'
         'software-version: "0.9.0"\n'
         'software-url: "https://example.org/software"\n'
         'crate-license: "https://example.org/license"\n'
-        'agent-name: "Example Author"\n'
-        'agent-orcid: "https://orcid.org/0000-0000-0000-0000"\n'
+        'authors:\n  - name: "Example Author"\n    orcid: "https://orcid.org/0000-0000-0000-0000"\n'
+        '  - name: "Second Author"\n    orcid: "https://orcid.org/0000-0000-0000-0001"\n'
+        'creator:\n  name: "Mahdi Jafarkhani"\n  orcid: "https://orcid.org/0009-0008-6162-8404"\n'
         'crate-name: "Example crate"\n'
         'crate-description: "Example run"\n'
     )
     return path
 
 
-def test_load_aggregate_profile(tmp_path: Path) -> None:
-    metadata = load_aggregate_profile(profile_file(tmp_path))
-    assert metadata == AggregateProfile(
+def test_load_main_profile(tmp_path: Path) -> None:
+    metadata = load_main_profile(profile_file(tmp_path))
+    assert metadata == MainProfile(
         software_name="FEniCS",
         software_version="0.9.0",
         software_url="https://example.org/software",
         crate_license="https://example.org/license",
         crate_name="Example crate",
         crate_description="Example run",
-        agent_name="Example Author",
-        agent_orcid="https://orcid.org/0000-0000-0000-0000",
+        authors=(
+            ProfilePerson("Example Author", "https://orcid.org/0000-0000-0000-0000"),
+            ProfilePerson("Second Author", "https://orcid.org/0000-0000-0000-0001"),
+        ),
+        creator=ProfilePerson("Mahdi Jafarkhani", "https://orcid.org/0009-0008-6162-8404"),
     )
     assert metadata.crate_description == "Example run"
     renamed = tmp_path / "custom-profile.yml"
     profile_file(tmp_path).rename(renamed)
-    assert load_aggregate_profile(renamed) == metadata
+    assert load_main_profile(renamed) == metadata
     with pytest.raises(IsADirectoryError):
-        load_aggregate_profile(tmp_path)
+        load_main_profile(tmp_path)
 
 
 def test_tool_parameter_links_to_software() -> None:
@@ -117,8 +122,10 @@ def test_workflow_defines_benchmark_inputs_and_outputs(tmp_path: Path) -> None:
     _add_software_node(crate, "#tool", "Example tool")
     _add_tool_parameters(crate, "#tool", benchmark.tool_parameters)
     _add_workflow_node(
-        crate, workflow_file, "#tool", "Example tool", "Example Author",
-        "https://orcid.org/0000-0000-0000-0000", list(workflow_inputs.values()), [output],
+        crate, workflow_file, "#tool", "Example tool",
+        (ProfilePerson("Example Author", "https://orcid.org/0000-0000-0000-0000"),),
+        ProfilePerson("Example Author", "https://orcid.org/0000-0000-0000-0000"),
+        list(workflow_inputs.values()), [output],
     )
 
     workflow = crate.get(workflow_file.name).as_jsonld()
@@ -148,7 +155,37 @@ def test_missing_metadata_is_reported(tmp_path: Path) -> None:
     path = profile_file(tmp_path)
     path.write_text(path.read_text().replace('crate-name: "Example crate"\n', ''))
     with pytest.raises(ValueError, match="missing"):
-        load_aggregate_profile(path)
+        load_main_profile(path)
+
+
+def test_people_require_valid_structure(tmp_path: Path) -> None:
+    path = profile_file(tmp_path)
+    original = path.read_text()
+    for old, new in [
+        ('authors:\n  - name: "Example Author"\n    orcid: "https://orcid.org/0000-0000-0000-0000"\n  - name: "Second Author"\n    orcid: "https://orcid.org/0000-0000-0000-0001"\n', 'authors: []\n'),
+        ('name: "Second Author"', 'name: ""'),
+        ('creator:\n  name: "Mahdi Jafarkhani"\n  orcid: "https://orcid.org/0009-0008-6162-8404"\n', 'creator: "Mahdi Jafarkhani"\n'),
+    ]:
+        path.write_text(original.replace(old, new))
+        with pytest.raises(ValueError):
+            load_main_profile(path)
+
+
+def test_workflow_has_multiple_authors_and_distinct_creator(tmp_path: Path) -> None:
+    workflow = tmp_path / "Snakefile"
+    workflow.write_text("rule all:\n    input: []\n")
+    crate = ROCrate()
+    authors = (
+        ProfilePerson("Author One", "https://orcid.org/0000-0000-0000-0000"),
+        ProfilePerson("Author Two", "https://orcid.org/0000-0000-0000-0001"),
+    )
+    creator = ProfilePerson("Creator", "https://orcid.org/0000-0000-0000-0002")
+    _add_workflow_node(crate, workflow, "https://example.org/software", "Example tool", authors, creator, [], [])
+    nodes = {node["@id"]: node for node in crate.metadata.generate()["@graph"]}
+    workflow_node = nodes[workflow.name]
+    assert workflow_node["author"] == [{"@id": person.orcid} for person in authors]
+    assert workflow_node["creator"] == {"@id": creator.orcid}
+    assert all(nodes[person.orcid]["name"] == person.name for person in (*authors, creator))
 
 
 def test_build_subcrate_args_from_exact_file(tmp_path: Path) -> None:
@@ -173,21 +210,21 @@ def test_runner_uses_profile_metadata(tmp_path: Path, monkeypatch: pytest.Monkey
     monkeypatch.setattr(runner, "BenchmarkLoader", lambda path: type("Loader", (), {"load": lambda self: benchmark})())
     prepared = runner.prepare_benchmark(
         tmp_path / "benchmark.json", tmp_path, {},
-        aggregate_profile=profile_file(tmp_path),
+        main_profile=profile_file(tmp_path),
     )
-    assert prepared.aggregate_profile.software_version == "0.9.0"
-    runner.create_aggregate_rocrate(
+    assert prepared.main_profile.software_version == "0.9.0"
+    runner.create_main_rocrate(
         tmp_path, prepared, tmp_path / "crate.zip",
         subcrate_paths=[], workflow_path=tmp_path / "workflow.yml",
     )
-    assert captured["aggregate_profile"] is prepared.aggregate_profile
-    assert captured["aggregate_profile"].crate_description == "Example run"
+    assert captured["main_profile"] is prepared.main_profile
+    assert captured["main_profile"].crate_description == "Example run"
 
 
 def test_cli_requires_profile_and_rejects_individual_metadata(tmp_path: Path) -> None:
     command = [
         "--benchmark-file", "benchmark.json", "--simulation-result-path", "results",
-        "--subcrate-path", "run.zip", "--rocrate-path", "aggregate.zip",
+        "--subcrate-path", "run.zip", "--rocrate-path", "main.zip",
         "--workflow-path", "workflow.yml",
     ]
     with pytest.raises(SystemExit):
