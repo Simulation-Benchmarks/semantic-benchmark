@@ -33,7 +33,7 @@ ROOT_DATASET_CONFORMS_TO = [
     {"@id": "https://w3id.org/workflowhub/workflow-ro-crate/1.1"},
 ]
 GITHUB_ACTIONS_ID = "#github-actions"
-MAIN_VALIDATION_PROFILE = "workflow-run-crate-0.5"
+MAIN_VALIDATION_PROFILE = "provenance-run-crate-0.5"
 PROFILE_CREATIVE_WORKS = (
     {
         "@id": "https://w3id.org/ro/wfrun/process/0.6",
