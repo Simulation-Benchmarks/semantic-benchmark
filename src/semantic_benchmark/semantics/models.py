@@ -120,4 +120,5 @@ class SemanticBenchmark(KGNode):
     parameter_sets: list[ParameterSet] = field(default_factory=list)
     described_by: Optional[Publication] = None
     processing_steps: list[ProcessingStep] = field(default_factory=list)
+    tool_parameters: list[dict[str, str]] = field(default_factory=list)
     main_profile: Optional[MainProfile] = None
