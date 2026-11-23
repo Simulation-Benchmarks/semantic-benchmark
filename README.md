@@ -1,178 +1,114 @@
 # semantic-benchmark
 
-Reusable Python helpers for semantic benchmark descriptions, main RO-Crate creation, and RoHub provenance workflows.
+`semantic-benchmark` turns a JSON-LD benchmark description into configurations for a simulation runner and combines completed runs into a validated main RO-Crate. It also provides commands for exchanging benchmark crates with RoHub. The package supplies building blocks; each simulation project runs its own solver and workflow.
 
 ## Install
 
-```bash
-pip install semantic-benchmark
-```
-
-Install optional features with extras:
+Requires Python 3.10 or newer.
 
 ```bash
-pip install "semantic-benchmark[rocrate]"
-pip install "semantic-benchmark[rohub]"
-pip install "semantic-benchmark[all]"
+python -m pip install semantic-benchmark
 ```
 
-To install the latest unreleased version directly from GitHub:
+For main RO-Crate creation, install the validator as well:
 
 ```bash
-pip install "semantic-benchmark[all] @ git+https://github.com/Simulation-Benchmarks/semantic-benchmark.git"
+python -m pip install "semantic-benchmark[rocrate]"
 ```
 
-## Provided Modules
+To work from this repository, use `python -m pip install -e ".[rocrate,test]"`.
 
-- `semantic_benchmark.semantics`: dataclasses and `BenchmarkLoader` for JSON-LD benchmark descriptions.
-- `semantic_benchmark.rohub`: RoHub configuration, upload, download, annotation, and query helpers.
-- `semantic_benchmark.rocrate`: main RO-Crate creation and validation helpers.
-- `semantic_benchmark.runner`: shared parameter-file, workspace, resource staging,
-  archive, logging, and main RO-Crate helpers for project benchmark runners.
+## Load a benchmark and prepare runs
 
-`semantic_benchmark.semantics` is available from the base installation.
-`semantic_benchmark.rocrate` requires the `rocrate` extra.
-`semantic_benchmark.rohub` requires the `rohub` extra.
-
-The root `semantic_benchmark` package re-exports the semantic classes for backwards compatibility.
-The legacy `semantic_benchmark.semantic` module also remains as a compatibility shim.
-
-Loaded numerical variables and parameters expose both `unit` (the original
-JSON-LD value) and `unit_iri` (the full IRI expanded through the document's
-namespace bindings). Consumers should use `unit_iri` when creating links.
-
-`semantic_benchmark.rohub.download_benchmark_resources(...)` downloads the
-requested benchmark resources from a RoHub research object. The semantic file
-is selected from the `Annotation Collection` resource in `list_resources()`.
-Passing `path="benchmark"` (CLI: `--path benchmark`) exports the complete research
-object using `ros_export_to_rocrate(..., use_format="zip")` and extracts its
-contents directly into `benchmark/`. If `path` / `--path` is omitted, the crate
-is extracted into the current directory. The directory is created if needed, and
-the temporary ZIP is removed afterward. The returned mapping contains the research object identifier
-under `RO-Crate` and the annotation resource identifier under
-`Annotation Collection` for the requested downloads.
-The package also exposes the
-`download-semantic-benchmark` CLI.
-
-`upload-semantic-benchmark` calls `upload_provenance_rocrate(...)` directly.
-It accepts `--provenance_folderpath` (the RO-Crate ZIP), `--benchmark-name`,
-`--username`, `--password`, and optional `--code-repository-url` and
-`--use-production-rohub` arguments. The software URL and version are read from
-the SoftwareApplication node in the RO-Crate ZIP.
-
-`semantic_benchmark.rocrate.create_main_ro(...)` always validates the generated
-main crate against `workflow-run-crate-0.5`. The package writes the RO-Crate
-zip, unpacks it to a validation directory, and runs `validate_rocrate(...)`.
-Main creation requires `subcrate_paths`, the exact reporter RO-Crate ZIPs
-from completed runs, and `workflow_path`, a YAML file used as the main workflow.
-The CLI accepts `--workflow-path` and one `--subcrate-path` per run. Each subcrate
-is the result of a `CreateAction` whose instrument is the YAML workflow; matched
-configuration values are action inputs and extracted metrics are action results.
-Main crate metadata comes from a YAML profile. `--profile` takes the
-exact YAML file path. Use `--profile`
-with the CLI, or pass `main_profile` to `runner.prepare_benchmark(...)`.
-The returned benchmark object exposes the loaded values in
-`benchmark.main_profile`; pass that object to
-`runner.create_main_rocrate(...)`.
+`BenchmarkLoader` reads and validates the JSON-LD description. `runner.prepare_benchmark` loads it and writes one `parameters_<configuration>.json` file per configuration into an **existing** working directory. It replaces any existing `parameters_*.json` files there.
 
 ```python
+from pathlib import Path
+from semantic_benchmark import runner
+
+work_dir = Path("work")
+work_dir.mkdir(exist_ok=True)
 benchmark = runner.prepare_benchmark(
-    benchmark_file, benchmark_dir, unit_symbols,
-    main_profile=benchmark_dir.parent / "provenance" / "profiles" / "main-rocrate-fenics.yml",
+    Path("benchmark.jsonld"),
+    work_dir,
+    {"METRE": "m", "PASCAL": "Pa"},
+    main_profile=Path("main-crate.yml"),
 )
-software_version = benchmark.main_profile.software_version
+
+for parameter_file in sorted(work_dir.glob("parameters_*.json")):
+    configuration, result_dir = runner.prepare_configuration(parameter_file, work_dir)
+    # Run your solver with result_dir / "parameters.json" and save its results there.
 ```
 
-For a subcrate reporter invocation, use
-`runner.build_subcrate_args(path_to_sub_crate_yml)` to convert the YAML settings
-to Snakemake command-line arguments. The supplied path is used exactly.
+The unit mapping adds suffixes such as `[m]` to parameter keys when a unit resolves. Unmapped units leave the parameter name unchanged. `prepare_benchmark` can also unpack an archive, copy resources, and create shared directories; see [`runner.py`](src/semantic_benchmark/runner.py).
 
-For example, `provenance/profiles/main-rocrate-fenics.yml` may contain:
+Parameter values can be arrays in JSON-LD. The loader expands each parameter set into the Cartesian product of its values, so a two-choice parameter and a three-choice parameter produce six configurations. See [`examples/array-configurations.json`](examples/array-configurations.json). To inspect a description and generate parameter files directly:
+
+```bash
+python examples/test_semantics.py examples/array-configurations.json --output-dir generated_parameters
+```
+
+## Create the main RO-Crate
+
+Each completed run needs a reporter RO-Crate ZIP and a result directory containing the metric files described in the benchmark. Pass the exact ZIP paths and a YAML workflow file to the runner:
+
+```python
+runner.create_main_rocrate(
+    work_dir / "results",
+    benchmark,
+    Path("main-rocrate.zip"),
+    subcrate_paths=[Path("work/results/run-1/workflow-run.zip")],
+    workflow_path=Path("workflow.yml"),
+)
+```
+
+The loaded `main_profile` supplies the software and crate metadata. For example:
 
 ```yaml
-software-name: "FEniCS"
-software-version: "0.9.0"
-software-url: "https://zbmath.org/software/4314"
+software-name: "Example solver"
+software-version: "1.0"
+software-url: "https://example.org/solver"
 crate-license: "https://opensource.org/licenses/MIT"
+crate-name: "Example benchmark results"
+crate-description: "Simulation results and provenance"
 authors:
   - name: "Example Author"
     orcid: "https://orcid.org/0000-0000-0000-0000"
-  - name: "Second Author"
-    orcid: "https://orcid.org/0000-0000-0000-0001"
 creator:
-  name: "Mahdi Jafarkhani"
-  orcid: "https://orcid.org/0009-0008-6162-8404"
-crate-name: "Plate benchmark provenance"
-crate-description: "Provenance run of the plate benchmark"
+  name: "Example Creator"
+  orcid: "https://orcid.org/0000-0000-0000-0001"
 ```
 
-The crate description is read directly from `crate-description`.
-`authors` is a nonempty list of workflow authors; `creator` identifies the
-person who created the workflow crate. Each person needs a name and ORCID URL.
-The workflow path and the
-completed subcrate paths remain run-specific arguments.
+`authors` must contain at least one person. The generated crate links configurations, metric values, workflows, software, and run crates, then validates against `workflow-run-crate-0.5`. A runner may attach tool-specific software inputs with `semantic_benchmark.rocrate.create.add_tool_parameter(benchmark, name, additional_type, default_value, description=None)` before creating the crate.
 
-Repository-specific projects can override the packaged RoHub defaults with:
+The same operation is available as `create-semantic-benchmark-rocrate`; run it with `--help` for its required paths.
 
-```python
-import semantic_benchmark.rohub as rohub
+## RoHub commands
 
-rohub.configure_repository_settings(
-    rohub_config={...},
-)
-```
-
-## Parameter sweeps with JSON-LD arrays
-
-A parameter's `has numerical value` or `has string value` may be a scalar or
-an array of alternatives. For example, reference both of these nodes from the
-same parameter set's `has part` property:
-
-```json
-[
-  {
-    "@id": "local:cell_type",
-    "label": "cell_type",
-    "has string value": ["triangle", "quadrilateral"]
-  },
-  {
-    "@id": "local:degree",
-    "label": "isoparametric_element_degree",
-    "has numerical value": [1, 2]
-  }
-]
-```
-
-Use a JSON-LD context mapping these value properties to `m4i:hasStringValue`
-and `m4i:hasNumericalValue`, as in the existing examples. `BenchmarkLoader.load()`
-expands each parameter set independently into the Cartesian product: this
-example produces four configurations. Scalars are repeated in every combination.
-All loaded configuration parts contain scalar values, so solvers and
-`runner.create_parameter_files()` continue to receive ordinary scalar parameters.
-Processing-step configuration references expand identically for provenance.
-
-A template identified as `sweep` produces identifiers `sweep--1`, `sweep--2`,
-etc., and corresponding `parameters_sweep--1.json` files. Its node IDs receive
-the same suffixes. Scalar-only sets and arrays with one distinct choice retain
-the original IDs and identifiers. Identifier collisions raise an error instead
-of overwriting output files.
-
-JSON-LD arrays represent unordered RDF alternatives, so duplicate RDF values
-collapse. Expansion sorts parameter IRIs and RDF value spellings to give stable
-identifiers regardless of array order (this is lexical, not numerical ordering).
-Empty arrays have no value and are rejected for runtime parameters. The lower-level
-`build_parameter_set()` returns a template whose values may be lists;
-`build_parameter_sets()` and `load()` return expanded scalar configurations.
-
-When testing this feature from a local checkout, install the modified package
-into the Python environment used by the benchmark runner:
+`download-semantic-benchmark` exports a research object's RO-Crate into a directory. Add `--semantic-resource-filename` to download its Annotation Collection resource separately.
 
 ```bash
-python -m pip install -e ../semantic-benchmark
+download-semantic-benchmark \
+  --identifier <research-object-uuid> \
+  --username <user> --password <password> \
+  --path benchmark
 ```
 
-Run that command from a sibling benchmark repository. Add `[all]` to the local
-package path if the workflow also needs the optional provenance dependencies.
+`upload-semantic-benchmark` uploads a completed provenance ZIP and links it to its benchmark research object:
 
-See [the complete array example](examples/array-configurations.json), which
-combines two radii, two cell types, and two element degrees into eight runs.
+```bash
+upload-semantic-benchmark \
+  --provenance_folderpath main-rocrate.zip \
+  --benchmark-name "Example benchmark" \
+  --benchmark-rohub-identifier <benchmark-ro-uuid> \
+  --username <user> --password <password>
+```
+
+Both commands use the development RoHub instance by default; add `--use-production-rohub` for production. See each command's `--help` for further options.
+
+## Development
+
+```bash
+python -m pip install -e ".[rocrate,test]"
+python -m pytest
+```
