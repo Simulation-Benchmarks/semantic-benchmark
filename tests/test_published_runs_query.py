@@ -12,6 +12,7 @@ def test_published_runs_follow_benchmark_ro_and_version() -> None:
     research_problem = URIRef("https://portal.mardi4nfdi.de/entity/Q6775295")
     graph.add((run, URIRef("http://w3id.org/nfdi4ing/metadata4ing#investigates"), benchmark))
     graph.add((run, URIRef("http://schema.org/datePublished"), Literal("2026-10-13")))
+    graph.add((run, URIRef("http://purl.org/dc/terms/description"), Literal("Published run")))
     graph.add(
         (
             run,
@@ -31,6 +32,7 @@ def test_published_runs_follow_benchmark_ro_and_version() -> None:
     assert str(rows[0].research_problem_uri) == str(research_problem)
     assert str(rows[0].branch_url) == "https://github.com/Simulation-Benchmarks/example/tree/main"
     assert str(rows[0].version) == "1.1.0"
+    assert str(rows[0].description) == "Published run"
 
     graph.remove((benchmark, URIRef("https://schema.org/version"), None))
     assert not list(graph.query(build_published_runs_query()))
@@ -41,6 +43,7 @@ def test_benchmarks_are_discovered_without_published_runs() -> None:
     benchmark = URIRef("https://w3id.org/ro-id/benchmark-without-runs")
     repository = URIRef("https://github.com/Simulation-Benchmarks/example")
     graph.add((benchmark, URIRef("http://purl.org/dc/terms/title"), Literal("example (version 1.1.0)")))
+    graph.add((benchmark, URIRef("http://purl.org/dc/terms/description"), Literal("Benchmark description")))
     graph.add((benchmark, URIRef("http://w3id.org/nfdi4ing/metadata4ing#investigates"), URIRef("https://example.org/problem")))
     graph.add((benchmark, URIRef("https://schema.org/version"), Literal("1.1.0")))
     graph.add((benchmark, URIRef("https://schema.org/codeRepository"), repository))
@@ -49,4 +52,5 @@ def test_benchmarks_are_discovered_without_published_runs() -> None:
     assert len(rows) == 1
     assert str(rows[0].benchmark_url) == str(benchmark)
     assert str(rows[0].repo) == str(repository)
+    assert str(rows[0].description) == "Benchmark description"
     assert not list(graph.query(build_published_runs_query()))
