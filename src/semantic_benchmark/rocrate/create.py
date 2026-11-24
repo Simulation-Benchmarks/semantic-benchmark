@@ -887,6 +887,7 @@ def create_main_ro(
     subcrate_paths: list[str | Path],
     main_profile: MainProfile,
     workflow_path: str | Path = "",
+    tool_parameters_file: str | Path | None = None,
 ) -> None:
     """Create and write a main RO-Crate for a benchmark result directory.
 
@@ -898,6 +899,8 @@ def create_main_ro(
         main_profile: Loaded main crate metadata.
         workflow_path: Required YAML workflow file to add as the main entity.
         subcrate_paths: Exact reporter RO-Crate ZIPs to include.
+        tool_parameters_file: Optional Croissant description whose source files
+            are relative to its directory.
 
     Returns:
         None. The function writes the main RO-Crate zip to
@@ -981,7 +984,12 @@ def create_main_ro(
             crate_description=metadata.crate_description,
         )
         _add_software_node(crate, software_id, software_name, software_version)
-        _add_tool_parameters(crate, software_id, benchmark_object.tool_parameters)
+        tool_parameters = list(benchmark_object.tool_parameters)
+        if tool_parameters_file is not None:
+            from semantic_benchmark.rocrate.tool_parameters import extract_tool_parameters
+
+            tool_parameters.extend(extract_tool_parameters(tool_parameters_file))
+        _add_tool_parameters(crate, software_id, tool_parameters)
         _add_profile_creative_works(crate)
         step_id = _add_workflow_node(
             crate,

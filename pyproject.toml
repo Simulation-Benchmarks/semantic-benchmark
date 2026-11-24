@@ -25,6 +25,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
+    "mlcroissant>=1.1,<2",
     "pandas",
     "pyshacl>=0.25",
     "rdflib",

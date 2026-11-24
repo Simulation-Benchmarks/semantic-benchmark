@@ -50,6 +50,13 @@ python examples/test_semantics.py examples/array-configurations.json --output-di
 
 ## Create the main RO-Crate
 
+Tool input defaults can be declared in a separate Croissant JSON-LD file. Its
+`FileObject.contentUrl` paths are resolved relative to that file. Pass the
+Croissant file to `runner.create_main_rocrate` with `tool_parameters_file`;
+the runner extracts the declared fields with `mlcroissant` and adds them as
+software inputs. For plain text files, `source.extract.fileProperty` can be
+`content` and `source.transform.regex` can capture each parameter value.
+
 Each completed run needs a reporter RO-Crate ZIP and a result directory containing the metric files described in the benchmark. Pass the exact ZIP paths and a YAML workflow file to the runner:
 
 ```python
@@ -59,6 +66,7 @@ runner.create_main_rocrate(
     Path("main-rocrate.zip"),
     subcrate_paths=[Path("work/results/run-1/workflow-run.zip")],
     workflow_path=Path("workflow.yml"),
+    tool_parameters_file=Path("work/results/run-1/tool-parameters.croissant.json"),
 )
 ```
 

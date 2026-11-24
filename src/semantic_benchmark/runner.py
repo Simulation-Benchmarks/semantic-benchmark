@@ -177,6 +177,7 @@ def create_main_rocrate(
     *,
     subcrate_paths: list[str | Path],
     workflow_path: str | Path,
+    tool_parameters_file: str | Path | None = None,
 ) -> None:
     """Create a main RO-Crate from the benchmark's loaded profile."""
     if benchmark.main_profile is None:
@@ -192,4 +193,5 @@ def create_main_rocrate(
         subcrate_paths=subcrate_paths,
         main_profile=benchmark.main_profile,
         workflow_path=workflow_path,
+        tool_parameters_file=tool_parameters_file,
     )
