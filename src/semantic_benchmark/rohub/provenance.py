@@ -349,16 +349,21 @@ def _named_graph_values_block(
     """.strip()
 
 
-def _order_clause(
-    order_name: str | None,
-    var_map: dict[str, str],
-) -> str:
-    """Build an ORDER BY clause for a selected parameter or metric."""
-    if not order_name:
-        return ""
+def sort_by_column(data: pd.DataFrame, column: str | None) -> pd.DataFrame:
+    """Sort query results by one column, numerically if all values are numbers.
 
-    order_var = var_map.get(order_name, sanitize_variable_name(order_name))
-    return f"\nORDER BY ?{order_var}"
+    The data queries do not sort in SPARQL: with ORDER BY over several named
+    graphs, the RoHub Virtuoso endpoint has returned an empty result instead of
+    the matching rows. SPARQL would also compare the plain string literals
+    alphabetically, so that "0.1" precedes "0.0125".
+    """
+    if data.empty or not column or column not in data.columns:
+        return data
+
+    numeric = pd.to_numeric(data[column], errors="coerce")
+    key = numeric if numeric.notna().all() else data[column].astype(str)
+    order = key.sort_values(kind="mergesort").index
+    return data.loc[order].reset_index(drop=True)
 
 
 def _format_query(
@@ -402,11 +407,9 @@ def build_dynamic_query(
         "\n".join(_metric_block(name, var_map) for name in metrics),
     )
 
-    order_name = parameters[0] if parameters else None
     return _format_query(
         select_vars,
         _named_graph_values_block(named_graphs, inner_query),
-        _order_clause(order_name, var_map),
         include_workflow=True,
     )
 
@@ -441,7 +444,6 @@ def build_legacy_dynamic_query(
     return _format_query(
         " ".join(["?tool_name", _select_variables([*parameters, *metrics], var_map)]),
         _named_graph_values_block(named_graphs, inner_query),
-        _order_clause(parameters[0] if parameters else None, var_map),
     )
 
 
@@ -643,8 +645,8 @@ def query_metric_data_from_named_graphs(
         metrics,
         named_graphs,
     )
-    
-    return query_sparql(query)
+
+    return sort_by_column(query_sparql(query), parameters[0] if parameters else None)
 
 
 def discover_benchmark_fields(
