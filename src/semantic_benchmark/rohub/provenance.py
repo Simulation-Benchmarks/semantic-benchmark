@@ -349,16 +349,21 @@ def _named_graph_values_block(
     """.strip()
 
 
-def _order_clause(
-    order_name: str | None,
-    var_map: dict[str, str],
-) -> str:
-    """Build an ORDER BY clause for a selected parameter or metric."""
-    if not order_name:
-        return ""
+def sort_by_column(data: pd.DataFrame, column: str | None) -> pd.DataFrame:
+    """Sort query results by one column, numerically if all values are numbers.
 
-    order_var = var_map.get(order_name, sanitize_variable_name(order_name))
-    return f"\nORDER BY ?{order_var}"
+    The data queries do not sort in SPARQL: with ORDER BY over several named
+    graphs, the RoHub Virtuoso endpoint has returned an empty result instead of
+    the matching rows. SPARQL would also compare the plain string literals
+    alphabetically, so that "0.1" precedes "0.0125".
+    """
+    if data.empty or not column or column not in data.columns:
+        return data
+
+    numeric = pd.to_numeric(data[column], errors="coerce")
+    key = numeric if numeric.notna().all() else data[column].astype(str)
+    order = key.sort_values(kind="mergesort").index
+    return data.loc[order].reset_index(drop=True)
 
 
 def _format_query(
@@ -402,11 +407,9 @@ def build_dynamic_query(
         "\n".join(_metric_block(name, var_map) for name in metrics),
     )
 
-    order_name = parameters[0] if parameters else None
     return _format_query(
         select_vars,
         _named_graph_values_block(named_graphs, inner_query),
-        _order_clause(order_name, var_map),
         include_workflow=True,
     )
 
@@ -441,7 +444,6 @@ def build_legacy_dynamic_query(
     return _format_query(
         " ".join(["?tool_name", _select_variables([*parameters, *metrics], var_map)]),
         _named_graph_values_block(named_graphs, inner_query),
-        _order_clause(parameters[0] if parameters else None, var_map),
     )
 
 
@@ -633,18 +635,25 @@ def query_metric_data_from_named_graphs(
     parameters: Sequence[str],
     metrics: Sequence[str],
     named_graphs: Sequence[str],
+    *,
+    legacy: bool = False,
 ):
-    """Query benchmark parameter and metric data from resolved RoHub graphs."""
+    """Query benchmark parameter and metric data from resolved RoHub graphs.
+
+    With ``legacy`` the query matches crates without workflow FormalParameter
+    links, as written by earlier versions of the publishing workflow.
+    """
     if not named_graphs:
         raise RuntimeError("No RoHub named graphs provided.")
 
-    query = build_dynamic_query(
+    builder = build_legacy_dynamic_query if legacy else build_dynamic_query
+    query = builder(
         parameters,
         metrics,
         named_graphs,
     )
-    
-    return query_sparql(query)
+
+    return sort_by_column(query_sparql(query), parameters[0] if parameters else None)
 
 
 def discover_benchmark_fields(
@@ -773,19 +782,27 @@ def fetch_benchmark_data(
             f"No RoHub named graphs found for benchmark {benchmark_name}."
         )
 
-    if parameters is None or metrics is None:
+    graphs = list(named_graphs.values())
+
+    # Crates published before the workflow linked its FormalParameters carry no
+    # fields for the current query. Fall back to the legacy query for them, so
+    # that records that are already published stay readable.
+    discovered_parameters, discovered_metrics = discover_benchmark_fields(graphs)
+    legacy = not discovered_parameters and not discovered_metrics
+    if legacy:
         discovered_parameters, discovered_metrics = discover_benchmark_fields(
-            list(named_graphs.values())
+            graphs, legacy=True
         )
-        if parameters is None:
-            parameters = discovered_parameters
-        if metrics is None:
-            metrics = discovered_metrics
+    if parameters is None:
+        parameters = discovered_parameters
+    if metrics is None:
+        metrics = discovered_metrics
 
     result = query_metric_data_from_named_graphs(
         parameters=parameters,
         metrics=metrics,
-        named_graphs=list(named_graphs.values()),
+        named_graphs=graphs,
+        legacy=legacy,
     )
 
     if result.empty:

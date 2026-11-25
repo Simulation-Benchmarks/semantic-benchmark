@@ -22,6 +22,7 @@ _PROVENANCE_EXPORTS = {
     "build_available_fields_query",
     "build_legacy_available_fields_query",
     "build_legacy_dynamic_query",
+    "sort_by_column",
     "sanitize_variable_name",
     "configure_rohub",
     "login_to_rohub",
