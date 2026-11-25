@@ -62,3 +62,39 @@ def test_query_metric_data_sorts_by_first_parameter(monkeypatch) -> None:
     assert "ORDER BY" not in sent[0].upper()
     assert list(result["element_size"]) == ["0.0125", "0.05", "0.1"]
     assert list(result["l2_error"]) == ["1", "2", "3"]
+
+
+def _patch_discovery(monkeypatch, new_fields, legacy_fields):
+    monkeypatch.setattr(provenance, "find_annotated_ro_uuids", lambda *a, **k: ["u1", "u2"])
+    monkeypatch.setattr(
+        provenance, "find_named_graphs_for_uuids", lambda uuids, **k: dict(zip(uuids, GRAPHS))
+    )
+    monkeypatch.setattr(
+        provenance,
+        "discover_benchmark_fields",
+        lambda graphs, *, legacy=False: legacy_fields if legacy else new_fields,
+    )
+    sent = []
+
+    def fake_query(query):
+        sent.append(query)
+        return pd.DataFrame({"tool_name": ["A"], "element_size": ["0.1"], "l2_error": ["1"]})
+
+    monkeypatch.setattr(provenance, "query_sparql", fake_query)
+    return sent
+
+
+def test_fetch_falls_back_to_legacy_query_for_older_crates(monkeypatch) -> None:
+    sent = _patch_discovery(monkeypatch, ([], []), (["element_size"], ["l2_error"]))
+
+    provenance.fetch_benchmark_data("bench", code_repository_url="https://example.org/repo")
+
+    assert sent == [build_legacy_dynamic_query(["element_size"], ["l2_error"], GRAPHS)]
+
+
+def test_fetch_uses_current_query_when_fields_are_found(monkeypatch) -> None:
+    sent = _patch_discovery(monkeypatch, (["element_size"], ["l2_error"]), ([], []))
+
+    provenance.fetch_benchmark_data("bench", code_repository_url="https://example.org/repo")
+
+    assert sent == [build_dynamic_query(["element_size"], ["l2_error"], GRAPHS)]

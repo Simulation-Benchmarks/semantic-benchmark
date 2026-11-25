@@ -635,12 +635,19 @@ def query_metric_data_from_named_graphs(
     parameters: Sequence[str],
     metrics: Sequence[str],
     named_graphs: Sequence[str],
+    *,
+    legacy: bool = False,
 ):
-    """Query benchmark parameter and metric data from resolved RoHub graphs."""
+    """Query benchmark parameter and metric data from resolved RoHub graphs.
+
+    With ``legacy`` the query matches crates without workflow FormalParameter
+    links, as written by earlier versions of the publishing workflow.
+    """
     if not named_graphs:
         raise RuntimeError("No RoHub named graphs provided.")
 
-    query = build_dynamic_query(
+    builder = build_legacy_dynamic_query if legacy else build_dynamic_query
+    query = builder(
         parameters,
         metrics,
         named_graphs,
@@ -775,19 +782,27 @@ def fetch_benchmark_data(
             f"No RoHub named graphs found for benchmark {benchmark_name}."
         )
 
-    if parameters is None or metrics is None:
+    graphs = list(named_graphs.values())
+
+    # Crates published before the workflow linked its FormalParameters carry no
+    # fields for the current query. Fall back to the legacy query for them, so
+    # that records that are already published stay readable.
+    discovered_parameters, discovered_metrics = discover_benchmark_fields(graphs)
+    legacy = not discovered_parameters and not discovered_metrics
+    if legacy:
         discovered_parameters, discovered_metrics = discover_benchmark_fields(
-            list(named_graphs.values())
+            graphs, legacy=True
         )
-        if parameters is None:
-            parameters = discovered_parameters
-        if metrics is None:
-            metrics = discovered_metrics
+    if parameters is None:
+        parameters = discovered_parameters
+    if metrics is None:
+        metrics = discovered_metrics
 
     result = query_metric_data_from_named_graphs(
         parameters=parameters,
         metrics=metrics,
-        named_graphs=list(named_graphs.values()),
+        named_graphs=graphs,
+        legacy=legacy,
     )
 
     if result.empty:
